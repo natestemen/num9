@@ -106,7 +106,7 @@ class Piece:
         self.shape = [list(tup) for tup in tuples]
 
     def non_zero_indices(self):
-        return zip(*self.shape.nonzero())
+        return zip(*np.where(self.shape))
 
 
 def surrounding_tiles(board, index_of_piece, piece):
