@@ -1,7 +1,7 @@
 from itertools import product
 import matplotlib.pyplot as plt
 import numpy as np
-from random import choice
+from random import choice, shuffle
 
 from pprint import pprint
 
@@ -205,8 +205,10 @@ def surrounding_indices(board, index_of_piece, piece):
 
 board = Board()
 
-board.place_randomly(Piece(5))
-board.place_randomly(Piece(8))
-board.place_randomly(Piece(2))
+tiles = list(range(10)) * 2
+shuffle(tiles)
+print(tiles)
+for num in tiles:
+    board.place_randomly(Piece(num))
 
 print(board.board)
