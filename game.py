@@ -19,24 +19,6 @@ class Board:
             nonzero_indices[1].min() : nonzero_indices[1].max() + 1,
         ]
 
-    def surrounding_indices(self, location, piece):
-        i, j = location
-        indices_of_piece_on_board = set(
-            map(lambda idx: (i + idx[0], j + idx[1]), piece.non_zero_indices())
-        )
-        possible_boundaries = set()
-        for i, j in indices_of_piece_on_board:
-            if i + 1 < len(self.board):
-                possible_boundaries.add((i + 1, j))
-            if i > 0:
-                possible_boundaries.add((i - 1, j))
-            if j + 1 < len(self.board[0]):
-                possible_boundaries.add((i, j + 1))
-            if j > 0:
-                possible_boundaries.add((i, j - 1))
-
-        return possible_boundaries - indices_of_piece_on_board
-
     def find_valid_moves(self, piece):
         board_height, board_width = self.board.shape
         tmp_board = np.zeros((board_height + 8, board_width + 8))
