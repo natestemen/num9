@@ -18,7 +18,7 @@ class Board:
                     case 0:
                         row_str += "⬜️"
                     case 10:
-                        row_str += "⬜️"
+                        row_str += "⬛️"
                     case 1:
                         row_str += "🟫"
                     case 2:
@@ -46,6 +46,7 @@ class Board:
             nonzero_indices[0].min() : nonzero_indices[0].max() + 1,
             nonzero_indices[1].min() : nonzero_indices[1].max() + 1,
         ]
+        self.board = np.pad(self.board, ((4, 4), (4, 4)), "constant")
 
     def find_valid_moves(self, piece):
         board_height, board_width = self.board.shape
@@ -55,10 +56,8 @@ class Board:
 
         possible = []
         for r in range(4):
-            # print(piece.shape)
             piece_one = np.array(piece.shape).copy()
             piece_one[piece_one > 1] = 1
-            # print(piece_one)
             piece_height, piece_width = len(piece.shape), len(piece.shape[0])
             for s, t in product(
                 range(new_board_height - piece_height),
@@ -82,6 +81,7 @@ class Board:
         height, width = np.array(piece.shape).shape
         i, j = location
         self.board[i : i + height, j : j + width] += piece.shape
+        self._trim_board()
 
     def place_randomly(self, piece):
         if self.board is None:
@@ -214,7 +214,7 @@ def surrounding_indices(board, index_of_piece, piece):
 
 board = Board()
 
-tiles = list(range(4)) * 2
+tiles = list(range(9)) * 2
 shuffle(tiles)
 print(tiles)
 for num in tiles:
