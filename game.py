@@ -1,15 +1,12 @@
 from itertools import product
-import matplotlib.pyplot as plt
-import numpy as np
 from random import choice, shuffle
 
-from pprint import pprint
+import numpy as np
 
 
 class Board:
-    def __init__(self, size=100):
-        self.board = np.zeros((size, size))
-        self.num_pieces = 0
+    def __init__(self):
+        self.board = None
         self.piece_sequence = []
 
     def _trim_board(self):
@@ -21,49 +18,50 @@ class Board:
 
     def find_valid_moves(self, piece):
         board_height, board_width = self.board.shape
-        tmp_board = np.zeros((board_height + 8, board_width + 8))
-        tmp_board[4 : 4 + board_height, 4 : 4 + board_width] = self.board
+        tmp_board = np.pad(self.board, ((4, 4), (4, 4)), "constant")
+        tmp_board[tmp_board > 1] = 1
         new_board_height, new_board_width = tmp_board.shape
 
         possible = []
-        # for _ in range(4):
-        piece_height, piece_width = len(piece.shape), len(piece.shape[0])
-        for s, t in product(
-            range(new_board_height - piece_height),
-            range(new_board_width - piece_width),
-        ):
-            blank = np.zeros((board_height + 8, board_width + 8))
-            blank[s : s + piece_height, t : t + piece_width] = piece.shape
-            maybe = tmp_board + blank
-            if maybe.max() != 1:
-                continue
-            surrounding_tile_indices = surrounding_indices(maybe, (s, t), piece)
-            if any(maybe[idx] for idx in surrounding_tile_indices):
-                possible.append((s, t))
+        for r in range(4):
+            # print(piece.shape)
+            piece_one = np.array(piece.shape).copy()
+            piece_one[piece_one > 1] = 1
+            # print(piece_one)
+            piece_height, piece_width = len(piece.shape), len(piece.shape[0])
+            for s, t in product(
+                range(new_board_height - piece_height),
+                range(new_board_width - piece_width),
+            ):
+                blank = np.zeros((board_height + 8, board_width + 8))
+                blank[s : s + piece_height, t : t + piece_width] = piece_one
+                maybe = tmp_board + blank
+                if maybe.max() != 1:
+                    continue
+                surrounding_tile_indices = surrounding_indices(maybe, (s, t), piece)
+                if any(maybe[idx] for idx in surrounding_tile_indices):
+                    possible.append((s, t, r))
 
-            # piece.rotate_by_90()
+            piece.rotate_by_90()
 
         return possible
 
     def place(self, piece, location):
-        board_height, board_width = self.board.shape
-        tmp_board = np.zeros((board_height + 8, board_width + 8))
-        tmp_board[4 : 4 + board_height, 4 : 4 + board_width] = self.board
-        self.board = tmp_board
-        height, width = piece.height, piece.width
+        self.board = np.pad(self.board, ((4, 4), (4, 4)), "constant")
+        height, width = np.array(piece.shape).shape
         i, j = location
-        self.board[i : i + height, j : j + width] = piece.shape
+        self.board[i : i + height, j : j + width] += piece.shape
 
     def place_randomly(self, piece):
-        if not self.num_pieces:
-            self.board = np.array(piece.shape)
+        if self.board is None:
+            self.board = np.pad(piece.shape, ((4, 4), (4, 4)), "constant")
+            self.piece_sequence.append({"name": piece})
         else:
-            location = choice(self.find_valid_moves(piece))
-            self.place(piece, location)
-
-        self.num_pieces += 1
-        self.piece_sequence.append(piece.name)
-        self._trim_board()
+            i, j, r = choice(self.find_valid_moves(piece))
+            for _ in range(r):
+                piece.rotate_by_90()
+            self.place(piece, (i, j))
+            self.piece_sequence.append({"name": piece})
 
 
 class Piece:
@@ -72,10 +70,10 @@ class Piece:
         match piece:
             case 0:
                 self.shape = [
-                    [1, 1, 1],
-                    [1, 0, 1],
-                    [1, 0, 1],
-                    [1, 1, 1],
+                    [10, 10, 10],
+                    [10, 0, 10],
+                    [10, 0, 10],
+                    [10, 10, 10],
                 ]
                 self.color = "grey"
             case 1:
@@ -88,66 +86,66 @@ class Piece:
                 self.color = "brown"
             case 2:
                 self.shape = [
-                    [0, 1, 1],
-                    [0, 1, 1],
-                    [1, 1, 0],
-                    [1, 1, 1],
+                    [0, 2, 2],
+                    [0, 2, 2],
+                    [2, 2, 0],
+                    [2, 2, 2],
                 ]
                 self.color = "orange"
             case 3:
                 self.shape = [
-                    [1, 1, 1],
-                    [0, 0, 1],
-                    [0, 1, 1],
-                    [1, 1, 1],
+                    [3, 3, 3],
+                    [0, 0, 3],
+                    [0, 3, 3],
+                    [3, 3, 3],
                 ]
                 self.color = "yellow"
             case 4:
                 self.shape = [
-                    [0, 1, 1],
-                    [0, 1, 0],
-                    [1, 1, 1],
-                    [0, 1, 1],
+                    [0, 4, 4],
+                    [0, 4, 0],
+                    [4, 4, 4],
+                    [0, 4, 4],
                 ]
                 self.color = "green"
             case 5:
                 self.shape = [
-                    [1, 1, 1],
-                    [1, 1, 1],
-                    [0, 0, 1],
-                    [1, 1, 1],
+                    [5, 5, 5],
+                    [5, 5, 5],
+                    [0, 0, 5],
+                    [5, 5, 5],
                 ]
                 self.color = "light blue"
             case 6:
                 self.shape = [
-                    [1, 1, 0],
-                    [1, 0, 0],
-                    [1, 1, 1],
-                    [1, 1, 1],
+                    [6, 6, 0],
+                    [6, 0, 0],
+                    [6, 6, 6],
+                    [6, 6, 6],
                 ]
                 self.color = "dark blue"
             case 7:
                 self.shape = [
-                    [1, 1, 1],
-                    [0, 1, 0],
-                    [1, 1, 0],
-                    [1, 0, 0],
+                    [7, 7, 7],
+                    [0, 7, 0],
+                    [7, 7, 0],
+                    [7, 0, 0],
                 ]
                 self.color = "purple"
             case 8:
                 self.shape = [
-                    [0, 1, 1],
-                    [0, 1, 1],
-                    [1, 1, 0],
-                    [1, 1, 0],
+                    [0, 8, 8],
+                    [0, 8, 8],
+                    [8, 8, 0],
+                    [8, 8, 0],
                 ]
                 self.color = "pink"
             case 9:
                 self.shape = [
-                    [1, 1, 1],
-                    [1, 1, 1],
-                    [1, 1, 0],
-                    [1, 1, 0],
+                    [9, 9, 9],
+                    [9, 9, 9],
+                    [9, 9, 0],
+                    [9, 9, 0],
                 ]
                 self.color = "red"
             case _:
@@ -155,8 +153,6 @@ class Piece:
                     f"piece must be an integer < 10, you passed {piece} "
                     f"of type {type(piece)}"
                 )  # TODO: error is being triggered in input rather than here
-        self.height = len(self.shape)
-        self.width = len(self.shape[0])
 
     def rotate_by_90(self):
         tuples = zip(*self.shape[::-1])
@@ -187,7 +183,7 @@ def surrounding_indices(board, index_of_piece, piece):
 
 board = Board()
 
-tiles = list(range(10)) * 2
+tiles = list(range(4)) * 2
 shuffle(tiles)
 print(tiles)
 for num in tiles:
