@@ -9,6 +9,37 @@ class Board:
         self.board = None
         self.piece_sequence = []
 
+    def __str__(self):
+        rows = []
+        for row in self.board:
+            row_str = ""
+            for block in row:
+                match block:
+                    case 0:
+                        row_str += "⬜️"
+                    case 10:
+                        row_str += "⬜️"
+                    case 1:
+                        row_str += "🟫"
+                    case 2:
+                        row_str += "🟧"
+                    case 3:
+                        row_str += "🟨"
+                    case 4:
+                        row_str += "🟩"
+                    case 5:
+                        row_str += "🔵"
+                    case 6:
+                        row_str += "🟦"
+                    case 7:
+                        row_str += "🟪"
+                    case 8:
+                        row_str += "💓"
+                    case 9:
+                        row_str += "🟥"
+            rows.append(row_str)
+        return "\n".join(rows)
+
     def _trim_board(self):
         nonzero_indices = np.nonzero(self.board)
         self.board = self.board[
@@ -189,4 +220,4 @@ print(tiles)
 for num in tiles:
     board.place_randomly(Piece(num))
 
-print(board.board)
+print(str(board))
