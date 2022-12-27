@@ -1,12 +1,17 @@
 from itertools import product
 from random import choice, shuffle
+from typing import Iterable
 
 import numpy as np
+import numpy.typing as npt
+
+
+BLANK_PIECE = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
 
 
 class Board:
     def __init__(self):
-        self.board = None
+        self.board = np.array(BLANK_PIECE)
         self.piece_sequence = []
 
     def __str__(self):
@@ -40,7 +45,17 @@ class Board:
             rows.append(row_str)
         return "\n".join(rows)
 
-    def _trim_board(self):
+    @property
+    def board_ones(self) -> npt.NDArray[np.int64]:
+        ones = self.board.copy()
+        ones[ones > 0] = 1
+        return ones
+
+    # @property
+    # def padded_board(self) -> npt.NDArray[np.int64]:
+    #     return np.pad(self.board, ((4, 4), (4, 4)), "constant")
+
+    def _trim_board(self) -> None:
         nonzero_indices = np.nonzero(self.board)
         self.board = self.board[
             nonzero_indices[0].min() : nonzero_indices[0].max() + 1,
@@ -48,7 +63,22 @@ class Board:
         ]
         self.board = np.pad(self.board, ((4, 4), (4, 4)), "constant")
 
-    def find_valid_moves(self, piece):
+    def find_valid_moves(self, piece: "Piece") -> list[tuple[int, int, int]]:
+        """finds all valid moves for given piece
+
+        Returns: TODO: implement this:
+            list of valid moves
+            [
+                {
+                    "level": 0, 1, 2, ...
+                    "location": (i, j),
+                    "rotation": {0, 1, 2, 3}
+                }, ...
+            ]
+
+        """
+        if np.array_equal(self.board, BLANK_PIECE):
+            return [(0, 0, 0)]
         board_height, board_width = self.board.shape
         tmp_board = np.pad(self.board, ((4, 4), (4, 4)), "constant")
         tmp_board[tmp_board > 1] = 1
@@ -67,6 +97,14 @@ class Board:
                 blank[s : s + piece_height, t : t + piece_width] = piece_one
                 maybe = tmp_board + blank
                 if maybe.max() != 1:
+                    # we have overlap
+                    piece_tile_count = np.count_nonzero(piece_one)
+                    overlap_section = maybe[s : s + piece_height, t : t + piece_width]
+                    overlap_section[overlap_section == 1] = 0
+                    overlap_count = np.count_nonzero(overlap_section)
+                    if piece_tile_count == overlap_count:
+                        print("IF FITS-------------")
+                    # TODO: need to check if it overlaps TWO tiles now
                     continue
                 surrounding_tile_indices = surrounding_indices(maybe, (s, t), piece)
                 if any(maybe[idx] for idx in surrounding_tile_indices):
@@ -76,28 +114,26 @@ class Board:
 
         return possible
 
-    def place(self, piece, location):
+    def place(self, piece: "Piece", location: tuple[int, int]) -> None:
         self.board = np.pad(self.board, ((4, 4), (4, 4)), "constant")
         height, width = np.array(piece.shape).shape
         i, j = location
         self.board[i : i + height, j : j + width] += piece.shape
         self._trim_board()
 
-    def place_randomly(self, piece):
-        if self.board is None:
-            self.board = np.pad(piece.shape, ((4, 4), (4, 4)), "constant")
-            self.piece_sequence.append({"name": piece})
-        else:
-            i, j, r = choice(self.find_valid_moves(piece))
-            for _ in range(r):
-                piece.rotate_by_90()
-            self.place(piece, (i, j))
-            self.piece_sequence.append({"name": piece})
+    def place_randomly(self, piece: "Piece") -> None:
+        """finds a random valid move, and adds the piece to the board"""
+        i, j, r = choice(self.find_valid_moves(piece))
+        for _ in range(r):
+            piece.rotate_by_90()
+        self.place(piece, (i, j))
+        self.piece_sequence.append({"name": piece})
 
 
 class Piece:
     def __init__(self, piece):
         self.name = str(piece)
+        self.shape: list[list[int]]
         match piece:
             case 0:
                 self.shape = [
@@ -185,11 +221,11 @@ class Piece:
                     f"of type {type(piece)}"
                 )  # TODO: error is being triggered in input rather than here
 
-    def rotate_by_90(self):
+    def rotate_by_90(self) -> None:
         tuples = zip(*self.shape[::-1])
         self.shape = [list(tup) for tup in tuples]
 
-    def non_zero_indices(self):
+    def non_zero_indices(self) -> Iterable[tuple[int]]:
         return zip(*np.where(self.shape))
 
 
