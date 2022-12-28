@@ -287,14 +287,3 @@ def surrounding_indices(board, index_of_piece, piece):
             possible_boundaries.add((i, j - 1))
 
     return possible_boundaries - indices_of_piece_on_board
-
-
-board = Board()
-
-tiles = list(range(9)) * 2
-shuffle(tiles)
-print(tiles)
-for num in tiles:
-    board.place_randomly(Piece(num))
-
-print(str(board))
