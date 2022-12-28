@@ -24,7 +24,8 @@ class Board:
     def __str__(self):
         rows = []
         for i, layer in enumerate(self.trim_board()):
-            rows.append(f"-------- LAYER {i} --------\n")
+            _, width = layer.shape
+            rows.append("{:-^{width}}".format(f" LAYER {i} ", width=2 * width))
             for row in layer:
                 row_str = ""
                 for block in row:
@@ -139,7 +140,7 @@ class Board:
                         i : i + piece_height, j : j + piece_width
                     ] = piece.ones_piece()
                     maybe = layer_ones + blank_layer_with_piece
-                    if maybe.max() != 1:
+                    if maybe.max() > 1:
                         # we have overlap
                         piece_tile_count = np.count_nonzero(piece.shape)
                         overlap_section = maybe[
