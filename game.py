@@ -23,34 +23,35 @@ class Board:
 
     def __str__(self):
         rows = []
-        small_board = self.trim_layer(self.board[0])
-        for row in small_board:
-            row_str = ""
-            for block in row:
-                match block:
-                    case 0:
-                        row_str += "⬜️"
-                    case 10:
-                        row_str += "⬛️"
-                    case 1:
-                        row_str += "🟫"
-                    case 2:
-                        row_str += "🟧"
-                    case 3:
-                        row_str += "🟨"
-                    case 4:
-                        row_str += "🟩"
-                    case 5:
-                        row_str += "🔵"
-                    case 6:
-                        row_str += "🟦"
-                    case 7:
-                        row_str += "🟪"
-                    case 8:
-                        row_str += "💓"
-                    case 9:
-                        row_str += "🟥"
-            rows.append(row_str)
+        for i, layer in enumerate(self.trim_board()):
+            rows.append(f"-------- LAYER {i} --------\n")
+            for row in layer:
+                row_str = ""
+                for block in row:
+                    match block:
+                        case 0:
+                            row_str += "⬜️"
+                        case 10:
+                            row_str += "⬛️"
+                        case 1:
+                            row_str += "🟫"
+                        case 2:
+                            row_str += "🟧"
+                        case 3:
+                            row_str += "🟨"
+                        case 4:
+                            row_str += "🟩"
+                        case 5:
+                            row_str += "🔵"
+                        case 6:
+                            row_str += "🟦"
+                        case 7:
+                            row_str += "🟪"
+                        case 8:
+                            row_str += "💓"
+                        case 9:
+                            row_str += "🟥"
+                rows.append(row_str)
         return "\n".join(rows)
 
     @classmethod
@@ -79,7 +80,7 @@ class Board:
             nonzero_indices[1].min() : nonzero_indices[1].max() + 1,
             nonzero_indices[2].min() : nonzero_indices[2].max() + 1,
         ]
-        return np.pad(trimmed_board, ((2, 2), (2, 2)), "constant")
+        return np.pad(trimmed_board, ((0, 0), (1, 1), (1, 1)))
 
     def trim_layer(self, layer) -> npt.NDArray[np.int32]:
         nonzero_indices = np.nonzero(layer)
@@ -87,7 +88,7 @@ class Board:
             nonzero_indices[0].min() : nonzero_indices[0].max() + 1,
             nonzero_indices[1].min() : nonzero_indices[1].max() + 1,
         ]
-        return np.pad(trimmed_layer, ((2, 2), (2, 2)), "constant")
+        return np.pad(trimmed_layer, ((2, 2), (2, 2)))
 
     def layer_loop_indices(self, layer_index: int) -> tuple[int, int, int, int]:
         # TODO: consume piece shape
@@ -97,7 +98,7 @@ class Board:
         j_min, j_max = min(nonzero_indices[1]) - 4, max(nonzero_indices[1]) + 4
         return i_min, i_max, j_min, j_max
 
-    def find_valid_moves(self, piece: "Piece") -> list[tuple[int, int, int]]:
+    def find_valid_moves(self, piece: "Piece") -> list[tuple[int, int, int, int]]:
         """finds all valid moves for given piece
 
         Returns: TODO: implement this:
@@ -113,7 +114,13 @@ class Board:
         """
         if self.board[0].max() == 0:
             center = self.center_coords()
-            center += (0,)  # rotation
+            layer, i, j = center
+            piece_height, piece_width = len(piece.shape), len(piece.shape[0])
+            blank_layer_with_piece = Board.blank_layer()
+            blank_layer_with_piece[
+                i : i + piece_height, j : j + piece_width
+            ] = piece.ones_piece()
+            center += (0, blank_layer_with_piece)  # rotation, and board
             return [center]
 
         possible_moves = []
@@ -141,12 +148,39 @@ class Board:
                         overlap_section[overlap_section == 1] = 0
                         overlap_count = np.count_nonzero(overlap_section)
                         if piece_tile_count == overlap_count:
-                            print("IT FITS ON TOP-------------")
-                        # TODO: need to check if it overlaps TWO tiles now
+                            overlap_count = 0
+                            for p in self.piece_sequence:
+                                on_board = p["location"]
+                                maybe = on_board + blank_layer_with_piece
+                                if maybe.max() > 1:
+                                    overlap_count += 1
+                                if overlap_count > 2:
+                                    blank_board_with_piece = Board.blank_board()
+                                    blank_board_with_piece[
+                                        layer_index + 1,
+                                        i : i + piece_height,
+                                        j : j + piece_width,
+                                    ] = piece.ones_piece()
+                                    possible_moves.append(
+                                        (
+                                            layer_index + 1,
+                                            i,
+                                            j,
+                                            r,
+                                            blank_board_with_piece,
+                                        )
+                                    )
+                                    # TODO: need to check if move is valid on said layer
                         continue
                     surrounding_tile_indices = surrounding_indices(maybe, (i, j), piece)
                     if any(maybe[idx] for idx in surrounding_tile_indices):
-                        possible_moves.append((layer_index, i, j, r))
+                        blank_board_with_piece = Board.blank_board()
+                        blank_board_with_piece[
+                            layer_index, i : i + piece_height, j : j + piece_width
+                        ] = piece.ones_piece()
+                        possible_moves.append(
+                            (layer_index, i, j, r, blank_board_with_piece)
+                        )
 
                 piece.rotate_by_90()
 
@@ -159,11 +193,11 @@ class Board:
 
     def place_randomly(self, piece: "Piece") -> None:
         """finds a random valid move, and adds the piece to the board"""
-        layer, i, j, r = choice(self.find_valid_moves(piece))
+        layer, i, j, r, piece_on_board = choice(self.find_valid_moves(piece))
         for _ in range(r):
             piece.rotate_by_90()
         self.place(piece, (layer, i, j))
-        self.piece_sequence.append({"name": piece})
+        self.piece_sequence.append({"name": piece, "location": piece_on_board})
 
 
 class Piece:
