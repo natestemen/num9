@@ -7,16 +7,24 @@ import numpy.typing as npt
 
 
 BLANK_PIECE = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
+BOARD_DEPTH = 6
+BOARD_HEIGHT = 160
+BOARD_WIDTH = 120
 
 
 class Board:
-    def __init__(self):
-        self.board = np.array(BLANK_PIECE)
+    def __init__(self, board=None):
+        self.board = (
+            np.zeros((BOARD_DEPTH, BOARD_HEIGHT, BOARD_WIDTH), dtype=np.int32)
+            if not board
+            else board
+        )
         self.piece_sequence = []
 
     def __str__(self):
         rows = []
-        for row in self.board:
+        small_board = self.trim_layer(self.board[0])
+        for row in small_board:
             row_str = ""
             for block in row:
                 match block:
@@ -45,23 +53,49 @@ class Board:
             rows.append(row_str)
         return "\n".join(rows)
 
+    @classmethod
+    def blank_board(cls):
+        return np.zeros((BOARD_DEPTH, BOARD_HEIGHT, BOARD_WIDTH), dtype=np.int32)
+
+    @classmethod
+    def blank_layer(cls):
+        return np.zeros((BOARD_HEIGHT, BOARD_WIDTH), dtype=np.int32)
+
     @property
     def board_ones(self) -> npt.NDArray[np.int64]:
         ones = self.board.copy()
         ones[ones > 0] = 1
         return ones
 
-    # @property
-    # def padded_board(self) -> npt.NDArray[np.int64]:
-    #     return np.pad(self.board, ((4, 4), (4, 4)), "constant")
+    def center_coords(self) -> tuple[int, int, int]:
+        center_width = BOARD_WIDTH // 2
+        center_height = BOARD_HEIGHT // 2
+        return 0, center_height, center_width
 
-    def _trim_board(self) -> None:
+    def trim_board(self) -> npt.NDArray[np.int32]:
         nonzero_indices = np.nonzero(self.board)
-        self.board = self.board[
+        trimmed_board = self.board[
+            nonzero_indices[0].min() : nonzero_indices[0].max() + 1,
+            nonzero_indices[1].min() : nonzero_indices[1].max() + 1,
+            nonzero_indices[2].min() : nonzero_indices[2].max() + 1,
+        ]
+        return np.pad(trimmed_board, ((2, 2), (2, 2)), "constant")
+
+    def trim_layer(self, layer) -> npt.NDArray[np.int32]:
+        nonzero_indices = np.nonzero(layer)
+        trimmed_layer = layer[
             nonzero_indices[0].min() : nonzero_indices[0].max() + 1,
             nonzero_indices[1].min() : nonzero_indices[1].max() + 1,
         ]
-        self.board = np.pad(self.board, ((4, 4), (4, 4)), "constant")
+        return np.pad(trimmed_layer, ((2, 2), (2, 2)), "constant")
+
+    def layer_loop_indices(self, layer_index: int) -> tuple[int, int, int, int]:
+        # TODO: consume piece shape
+        layer = self.board[layer_index]
+        nonzero_indices = np.nonzero(layer)
+        i_min, i_max = min(nonzero_indices[0]) - 4, max(nonzero_indices[0]) + 4
+        j_min, j_max = min(nonzero_indices[1]) - 4, max(nonzero_indices[1]) + 4
+        return i_min, i_max, j_min, j_max
 
     def find_valid_moves(self, piece: "Piece") -> list[tuple[int, int, int]]:
         """finds all valid moves for given piece
@@ -77,56 +111,58 @@ class Board:
             ]
 
         """
-        if np.array_equal(self.board, BLANK_PIECE):
-            return [(0, 0, 0)]
-        board_height, board_width = self.board.shape
-        tmp_board = np.pad(self.board, ((4, 4), (4, 4)), "constant")
-        tmp_board[tmp_board > 1] = 1
-        new_board_height, new_board_width = tmp_board.shape
+        if self.board[0].max() == 0:
+            center = self.center_coords()
+            center += (0,)  # rotation
+            return [center]
 
-        possible = []
-        for r in range(4):
-            piece_one = np.array(piece.shape).copy()
-            piece_one[piece_one > 1] = 1
-            piece_height, piece_width = len(piece.shape), len(piece.shape[0])
-            for s, t in product(
-                range(new_board_height - piece_height),
-                range(new_board_width - piece_width),
-            ):
-                blank = np.zeros((board_height + 8, board_width + 8))
-                blank[s : s + piece_height, t : t + piece_width] = piece_one
-                maybe = tmp_board + blank
-                if maybe.max() != 1:
-                    # we have overlap
-                    piece_tile_count = np.count_nonzero(piece_one)
-                    overlap_section = maybe[s : s + piece_height, t : t + piece_width]
-                    overlap_section[overlap_section == 1] = 0
-                    overlap_count = np.count_nonzero(overlap_section)
-                    if piece_tile_count == overlap_count:
-                        print("IF FITS-------------")
-                    # TODO: need to check if it overlaps TWO tiles now
-                    continue
-                surrounding_tile_indices = surrounding_indices(maybe, (s, t), piece)
-                if any(maybe[idx] for idx in surrounding_tile_indices):
-                    possible.append((s, t, r))
+        possible_moves = []
+        for layer_index, layer in enumerate(self.board):
+            if layer.max() == 0:  # and self.board[layer_index - 1].max() == 0:
+                break
 
-            piece.rotate_by_90()
+            for r in range(4):
+                piece_height, piece_width = len(piece.shape), len(piece.shape[0])
+                layer_ones = layer.copy()
+                layer_ones[layer_ones > 1] = 1
+                i_start, i_stop, j_start, j_stop = self.layer_loop_indices(layer_index)
+                for i, j in product(range(i_start, i_stop), range(j_start, j_stop)):
+                    blank_layer_with_piece = Board.blank_layer()
+                    blank_layer_with_piece[
+                        i : i + piece_height, j : j + piece_width
+                    ] = piece.ones_piece()
+                    maybe = layer_ones + blank_layer_with_piece
+                    if maybe.max() != 1:
+                        # we have overlap
+                        piece_tile_count = np.count_nonzero(piece.shape)
+                        overlap_section = maybe[
+                            i : i + piece_height, j : j + piece_width
+                        ]
+                        overlap_section[overlap_section == 1] = 0
+                        overlap_count = np.count_nonzero(overlap_section)
+                        if piece_tile_count == overlap_count:
+                            print("IT FITS ON TOP-------------")
+                        # TODO: need to check if it overlaps TWO tiles now
+                        continue
+                    surrounding_tile_indices = surrounding_indices(maybe, (i, j), piece)
+                    if any(maybe[idx] for idx in surrounding_tile_indices):
+                        possible_moves.append((layer_index, i, j, r))
 
-        return possible
+                piece.rotate_by_90()
 
-    def place(self, piece: "Piece", location: tuple[int, int]) -> None:
-        self.board = np.pad(self.board, ((4, 4), (4, 4)), "constant")
+        return possible_moves
+
+    def place(self, piece: "Piece", location: tuple[int, int, int]) -> None:
         height, width = np.array(piece.shape).shape
-        i, j = location
-        self.board[i : i + height, j : j + width] += piece.shape
-        self._trim_board()
+        layer, i, j = location
+        self.board[layer, i : i + height, j : j + width] += piece.shape
 
     def place_randomly(self, piece: "Piece") -> None:
         """finds a random valid move, and adds the piece to the board"""
-        i, j, r = choice(self.find_valid_moves(piece))
+        layer, i, j, r = choice(self.find_valid_moves(piece))
         for _ in range(r):
             piece.rotate_by_90()
-        self.place(piece, (i, j))
+        self.place(piece, (layer, i, j))
         self.piece_sequence.append({"name": piece})
 
 
@@ -227,6 +263,11 @@ class Piece:
 
     def non_zero_indices(self) -> Iterable[tuple[int]]:
         return zip(*np.where(self.shape))
+
+    def ones_piece(self) -> npt.NDArray[np.int32]:
+        array = np.array(self.shape)
+        array[array > 1] = 1
+        return array
 
 
 def surrounding_indices(board, index_of_piece, piece):
