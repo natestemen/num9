@@ -16,7 +16,7 @@ class Board:
     def __init__(self, board=None):
         self.board = (
             np.zeros((BOARD_DEPTH, BOARD_HEIGHT, BOARD_WIDTH), dtype=np.int32)
-            if not board
+            if board is None
             else board
         )
         self.piece_sequence = []
