@@ -179,7 +179,7 @@ class Board:
     def score(self) -> int:
         score = 0
         for p in self.piece_sequence:
-            score += p["name"].name * p["layer"]
+            score += int(p["name"].name) * p["layer"]
         return score
 
     def find_valid_moves(self, piece: "Piece") -> list[tuple[int, int, int, int]]:

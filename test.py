@@ -11,6 +11,7 @@ for num in tiles:
     board.place_randomly(Piece(num))
 
 print(str(board))
+print(f"SCORE: {board.score()}")
 
 newboard = Board.blank_board()
 for p in board.piece_sequence:
