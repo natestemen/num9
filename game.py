@@ -1,10 +1,9 @@
 from itertools import product
-from random import choice, shuffle
-from typing import Iterable
+from random import choice
+from typing import Any, Iterable
 
 import numpy as np
 import numpy.typing as npt
-
 
 BLANK_PIECE = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
 BOARD_DEPTH = 6
@@ -19,7 +18,7 @@ class Board:
             if board is None
             else board
         )
-        self.piece_sequence = []
+        self.piece_sequence: list[dict[str, Any]] = []
 
     def __str__(self):
         rows = []
@@ -172,7 +171,7 @@ class Board:
     ) -> Iterable[npt.NDArray[np.int32]]:
         for piece_data in self.piece_sequence:
             if piece_data["layer"] == layer_index:
-                board = piece_data["location"]
+                board = piece_data["location"].copy()
                 if ones:
                     board[board > 1] = 1
                 yield board
@@ -278,7 +277,10 @@ class Board:
 
     def place_randomly(self, piece: "Piece") -> None:
         """finds a random valid move, and adds the piece to the board"""
-        layer, i, j, r, piece_on_board = choice(self.find_valid_moves(piece))
+        valid_moves = self.find_valid_moves(piece)
+        print(len(valid_moves))
+        # layer, i, j, r, piece_on_board = choice(self.find_valid_moves(piece))
+        layer, i, j, r, piece_on_board = choice(valid_moves)
         for _ in range(r):
             piece.rotate_by_90()
         self.place(piece, (layer, i, j))
