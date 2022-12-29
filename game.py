@@ -52,6 +52,9 @@ class Board:
                             row_str += "💓"
                         case 9:
                             row_str += "🟥"
+                        case _:
+                            row_str += "🔳"
+                            print(f"oh shit got strange value: {_}")
                 rows.append(row_str)
         return "\n".join(rows)
 
@@ -60,11 +63,35 @@ class Board:
         return np.zeros((BOARD_DEPTH, BOARD_HEIGHT, BOARD_WIDTH), dtype=np.int32)
 
     @classmethod
+    def blank_board_with_piece(
+        cls, piece: "Piece", location: tuple[int, int, int], ones: bool = False
+    ) -> npt.NDArray[np.int32]:
+        bboard = cls.blank_board()
+        layer, i, j = location
+        piece_height, piece_width = len(piece.shape), len(piece.shape[0])
+        bboard[layer, i : i + piece_height, j : j + piece_width] = piece.shape
+        if ones:
+            bboard[bboard > 1] = 1
+        return bboard
+
+    @classmethod
     def blank_layer(cls):
         return np.zeros((BOARD_HEIGHT, BOARD_WIDTH), dtype=np.int32)
 
+    @classmethod
+    def blank_layer_with_piece(
+        cls, piece: "Piece", location: tuple[int, int], ones: bool = False
+    ) -> npt.NDArray[np.int32]:
+        layer = cls.blank_layer()
+        i, j = location
+        piece_height, piece_width = len(piece.shape), len(piece.shape[0])
+        layer[i : i + piece_height, j : j + piece_width] = piece.shape
+        if ones:
+            layer[layer > 1] = 1
+        return layer
+
     @property
-    def board_ones(self) -> npt.NDArray[np.int64]:
+    def board_ones(self) -> npt.NDArray[np.int32]:
         ones = self.board.copy()
         ones[ones > 0] = 1
         return ones
@@ -99,6 +126,63 @@ class Board:
         j_min, j_max = min(nonzero_indices[1]) - 4, max(nonzero_indices[1]) + 4
         return i_min, i_max, j_min, j_max
 
+    def validate_touching(self, piece: "Piece", location) -> bool:
+        layer_idx, i, j = location
+        layer = self.board[layer_idx]
+        surrounding_tile_indices = surrounding_indices((i, j), piece)
+        return any(layer[idx] for idx in surrounding_tile_indices)
+
+    def validate_supported(self, piece: "Piece", location) -> bool:
+        layer_index, i, j = location
+        if layer_index == 0:
+            return True
+
+        layer_ones = self.board[layer_index].copy()
+        layer_ones[layer_ones > 1] = 1
+        piece_on_layer = Board.blank_layer_with_piece(piece, (i, j), ones=True)
+        maybe = layer_ones + piece_on_layer
+
+        piece_tile_count = np.count_nonzero(piece.shape)
+        piece_tile_overlap_count = np.count_nonzero(maybe > 1)
+        if piece_tile_count == piece_tile_overlap_count:
+            # piece could be supported underneath
+            overlap_count = 0
+            blank_board_with_piece = Board.blank_board_with_piece(
+                piece, (layer_index, i, j), ones=True
+            )
+            # overlap_count = sum((on_board + blank_board_with_piece).max() > 1 for on_board in self.pieces_on_layer(layer_index, ones=True))
+            for on_board in self.pieces_on_layer(layer_index, ones=True):
+                maybe = on_board + blank_board_with_piece
+                if maybe.max() > 1:
+                    overlap_count += 1
+
+            if overlap_count >= 2:
+                if self.no_pieces_on_layer(layer_index + 1) or self.validate_touching(
+                    piece, (layer_index + 1, i, j)
+                ):
+                    return True
+        return False
+
+    def no_pieces_on_layer(self, layer_index: int) -> bool:
+        layer = self.board[layer_index]
+        return layer.max() == 0
+
+    def pieces_on_layer(
+        self, layer_index: int, ones: bool = False
+    ) -> Iterable[npt.NDArray[np.int32]]:
+        for piece_data in self.piece_sequence:
+            if piece_data["layer"] == layer_index:
+                board = piece_data["location"]
+                if ones:
+                    board[board > 1] = 1
+                yield board
+
+    def score(self) -> int:
+        score = 0
+        for p in self.piece_sequence:
+            score += p["name"].name * p["layer"]
+        return score
+
     def find_valid_moves(self, piece: "Piece") -> list[tuple[int, int, int, int]]:
         """finds all valid moves for given piece
 
@@ -115,13 +199,8 @@ class Board:
         """
         if self.board[0].max() == 0:
             center = self.center_coords()
-            layer, i, j = center
-            piece_height, piece_width = len(piece.shape), len(piece.shape[0])
-            blank_layer_with_piece = Board.blank_layer()
-            blank_layer_with_piece[
-                i : i + piece_height, j : j + piece_width
-            ] = piece.ones_piece()
-            center += (0, blank_layer_with_piece)  # rotation, and board
+            blank_board_with_piece = Board.blank_board_with_piece(piece, center)
+            center += (0, blank_board_with_piece)  # rotation, and board
             return [center]
 
         possible_moves = []
@@ -129,59 +208,62 @@ class Board:
             if layer.max() == 0:  # and self.board[layer_index - 1].max() == 0:
                 break
 
-            for r in range(4):
-                piece_height, piece_width = len(piece.shape), len(piece.shape[0])
-                layer_ones = layer.copy()
-                layer_ones[layer_ones > 1] = 1
-                i_start, i_stop, j_start, j_stop = self.layer_loop_indices(layer_index)
+            i_start, i_stop, j_start, j_stop = self.layer_loop_indices(layer_index)
+            layer_ones = layer.copy()
+            layer_ones[layer_ones > 1] = 1
+            for rot in range(4):
                 for i, j in product(range(i_start, i_stop), range(j_start, j_stop)):
-                    blank_layer_with_piece = Board.blank_layer()
-                    blank_layer_with_piece[
-                        i : i + piece_height, j : j + piece_width
-                    ] = piece.ones_piece()
+                    blank_layer_with_piece = Board.blank_layer_with_piece(
+                        piece, (i, j), ones=True
+                    )
                     maybe = layer_ones + blank_layer_with_piece
-                    if maybe.max() > 1:
-                        # we have overlap
+
+                    if maybe.max() > 1:  # we have overlap
                         piece_tile_count = np.count_nonzero(piece.shape)
-                        overlap_section = maybe[
-                            i : i + piece_height, j : j + piece_width
-                        ]
-                        overlap_section[overlap_section == 1] = 0
-                        overlap_count = np.count_nonzero(overlap_section)
-                        if piece_tile_count == overlap_count:
+                        piece_tile_overlap_count = np.count_nonzero(maybe > 1)
+                        if piece_tile_count == piece_tile_overlap_count:
+                            # piece could be supported underneath
                             overlap_count = 0
-                            for p in self.piece_sequence:
-                                on_board = p["location"]
-                                maybe = on_board + blank_layer_with_piece
+                            blank_board_with_piece = Board.blank_board_with_piece(
+                                piece, (layer_index, i, j), ones=True
+                            )
+                            for on_board in self.pieces_on_layer(
+                                layer_index, ones=True
+                            ):
+                                maybe = on_board + blank_board_with_piece
                                 if maybe.max() > 1:
                                     overlap_count += 1
-                                if overlap_count > 2:
-                                    blank_board_with_piece = Board.blank_board()
-                                    blank_board_with_piece[
-                                        layer_index + 1,
-                                        i : i + piece_height,
-                                        j : j + piece_width,
-                                    ] = piece.ones_piece()
+
+                            if overlap_count >= 2:
+                                if self.no_pieces_on_layer(
+                                    layer_index + 1
+                                ) or self.validate_touching(
+                                    piece, (layer_index + 1, i, j)
+                                ):
+                                    blank_board_with_piece = (
+                                        Board.blank_board_with_piece(
+                                            piece, (layer_index + 1, i, j)
+                                        )
+                                    )
                                     possible_moves.append(
                                         (
                                             layer_index + 1,
                                             i,
                                             j,
-                                            r,
+                                            rot,
                                             blank_board_with_piece,
                                         )
                                     )
-                                    # TODO: need to check if move is valid on said layer
-                        continue
-                    surrounding_tile_indices = surrounding_indices(maybe, (i, j), piece)
-                    if any(maybe[idx] for idx in surrounding_tile_indices):
-                        blank_board_with_piece = Board.blank_board()
-                        blank_board_with_piece[
-                            layer_index, i : i + piece_height, j : j + piece_width
-                        ] = piece.ones_piece()
-                        possible_moves.append(
-                            (layer_index, i, j, r, blank_board_with_piece)
-                        )
+
+                    elif self.validate_touching(piece, (layer_index, i, j)):
+                        if self.validate_supported(piece, (layer_index, i, j)):
+                            blank_board_with_piece = Board.blank_board_with_piece(
+                                piece, (layer_index, i, j)
+                            )
+
+                            possible_moves.append(
+                                (layer_index, i, j, rot, blank_board_with_piece)
+                            )
 
                 piece.rotate_by_90()
 
@@ -191,6 +273,8 @@ class Board:
         height, width = np.array(piece.shape).shape
         layer, i, j = location
         self.board[layer, i : i + height, j : j + width] += piece.shape
+        if self.board.max() > 10:
+            print(piece.name, location)
 
     def place_randomly(self, piece: "Piece") -> None:
         """finds a random valid move, and adds the piece to the board"""
@@ -198,7 +282,9 @@ class Board:
         for _ in range(r):
             piece.rotate_by_90()
         self.place(piece, (layer, i, j))
-        self.piece_sequence.append({"name": piece, "location": piece_on_board})
+        self.piece_sequence.append(
+            {"name": piece, "location": piece_on_board, "layer": layer}
+        )
 
 
 class Piece:
@@ -305,18 +391,20 @@ class Piece:
         return array
 
 
-def surrounding_indices(board, index_of_piece, piece):
-    i, j = index_of_piece
+def surrounding_indices(
+    location: tuple[int, int], piece: Piece
+) -> set[tuple[int, int]]:
+    i, j = location
     indices_of_piece_on_board = set(
         map(lambda idx: (i + idx[0], j + idx[1]), piece.non_zero_indices())
     )
     possible_boundaries = set()
     for i, j in indices_of_piece_on_board:
-        if i + 1 < len(board):
+        if i + 1 < BOARD_HEIGHT:
             possible_boundaries.add((i + 1, j))
         if i > 0:
             possible_boundaries.add((i - 1, j))
-        if j + 1 < len(board[0]):
+        if j + 1 < BOARD_WIDTH:
             possible_boundaries.add((i, j + 1))
         if j > 0:
             possible_boundaries.add((i, j - 1))
