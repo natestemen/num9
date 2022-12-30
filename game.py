@@ -1,6 +1,6 @@
 from itertools import product
 from random import choice
-from typing import Any, Iterable
+from typing import cast, Any, Iterable
 
 import numpy as np
 import numpy.typing as npt
@@ -120,16 +120,25 @@ class Board:
     def layer_loop_indices(self, layer_index: int) -> tuple[int, int, int, int]:
         # TODO: consume piece shape
         layer = self.board[layer_index]
-        nonzero_indices = np.nonzero(layer)
-        i_min, i_max = min(nonzero_indices[0]) - 4, max(nonzero_indices[0]) + 4
-        j_min, j_max = min(nonzero_indices[1]) - 4, max(nonzero_indices[1]) + 4
+        if layer.max() == 0:
+            layer = self.board[layer_index - 1]
+
+        i_indices, j_indices = np.nonzero(layer)
+        i_min, i_max = min(i_indices) - 4, max(i_indices) + 4
+        j_min, j_max = min(j_indices) - 4, max(j_indices) + 4
         return i_min, i_max, j_min, j_max
 
     def validate_touching(self, piece: "Piece", location) -> bool:
         layer_idx, i, j = location
         layer = self.board[layer_idx]
         surrounding_tile_indices = surrounding_indices((i, j), piece)
-        return any(layer[idx] for idx in surrounding_tile_indices)
+        touching = any(layer[idx] for idx in surrounding_tile_indices)
+
+        indices_of_piece_on_board = set(
+            (i + x, j + y) for x, y in piece.non_zero_indices()
+        )
+        overlapping = any(layer[idx] for idx in indices_of_piece_on_board)
+        return touching and not overlapping
 
     def validate_supported(self, piece: "Piece", location) -> bool:
         layer_index, i, j = location
@@ -182,7 +191,9 @@ class Board:
             score += int(p["name"].name) * p["layer"]
         return score
 
-    def find_valid_moves(self, piece: "Piece") -> list[tuple[int, int, int, int]]:
+    def find_valid_moves(
+        self, piece: "Piece"
+    ) -> list[tuple[int, int, int, int, npt.NDArray[np.int32]]]:
         """finds all valid moves for given piece
 
         Returns: TODO: implement this:
@@ -196,15 +207,16 @@ class Board:
             ]
 
         """
-        if self.board[0].max() == 0:
+        if not self.piece_sequence:
             center = self.center_coords()
             blank_board_with_piece = Board.blank_board_with_piece(piece, center)
-            center += (0, blank_board_with_piece)  # rotation, and board
-            return [center]
+            final = center + (0, blank_board_with_piece)  # rotation, and board
+            return [final]
 
         possible_moves = []
         for layer_index, layer in enumerate(self.board):
             if layer.max() == 0:  # and self.board[layer_index - 1].max() == 0:
+                # if layer_index > 0 and self.board[layer_index - 1].max() == 0:
                 break
 
             i_start, i_stop, j_start, j_stop = self.layer_loop_indices(layer_index)
@@ -281,6 +293,25 @@ class Board:
         print(len(valid_moves))
         # layer, i, j, r, piece_on_board = choice(self.find_valid_moves(piece))
         layer, i, j, r, piece_on_board = choice(valid_moves)
+        for _ in range(r):
+            piece.rotate_by_90()
+        self.place(piece, (layer, i, j))
+        self.piece_sequence.append(
+            {"name": piece, "location": piece_on_board, "layer": layer}
+        )
+
+    def go_up_randomly(self, piece: "Piece") -> None:
+        """picks a move at the highest level possible"""
+        valid_moves = self.find_valid_moves(piece)
+        print(len(valid_moves))
+        layers = [layer for layer, *_ in valid_moves]
+        if len(set(layers)) == 1:
+            layer, i, j, r, piece_on_board = choice(valid_moves)
+        else:
+            max_layer = max(layers)
+            option_indices = [i for i, l in enumerate(layers) if l == max_layer]
+            random_index = choice(option_indices)
+            layer, i, j, r, piece_on_board = valid_moves[random_index]
         for _ in range(r):
             piece.rotate_by_90()
         self.place(piece, (layer, i, j))
@@ -384,22 +415,16 @@ class Piece:
         tuples = zip(*self.shape[::-1])
         self.shape = [list(tup) for tup in tuples]
 
-    def non_zero_indices(self) -> Iterable[tuple[int]]:
-        return zip(*np.where(self.shape))
-
-    def ones_piece(self) -> npt.NDArray[np.int32]:
-        array = np.array(self.shape)
-        array[array > 1] = 1
-        return array
+    def non_zero_indices(self) -> Iterable[tuple[int, int]]:
+        for thing in zip(*np.where(self.shape)):
+            yield cast(tuple[int, int], thing)
 
 
 def surrounding_indices(
     location: tuple[int, int], piece: Piece
 ) -> set[tuple[int, int]]:
     i, j = location
-    indices_of_piece_on_board = set(
-        map(lambda idx: (i + idx[0], j + idx[1]), piece.non_zero_indices())
-    )
+    indices_of_piece_on_board = set((i + x, j + y) for x, y in piece.non_zero_indices())
     possible_boundaries = set()
     for i, j in indices_of_piece_on_board:
         if i + 1 < BOARD_HEIGHT:
