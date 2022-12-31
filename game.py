@@ -11,6 +11,10 @@ BOARD_HEIGHT = 160
 BOARD_WIDTH = 120
 
 
+class InvalidPlacementError(Exception):
+    pass
+
+
 class Board:
     def __init__(self, board=None):
         self.board = (
@@ -285,7 +289,9 @@ class Board:
         layer, i, j = location
         self.board[layer, i : i + height, j : j + width] += piece.shape
         if self.board.max() > 10:
-            print(piece.name, location)
+            raise InvalidPlacementError(
+                f"Placing a '{piece.name}' in that location would result in overlap"
+            )
 
     def place_randomly(self, piece: "Piece") -> None:
         """finds a random valid move, and adds the piece to the board"""
