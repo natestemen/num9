@@ -144,6 +144,12 @@ class Board:
         overlapping = any(layer[idx] for idx in indices_of_piece_on_board)
         return touching and not overlapping
 
+    def num_edges_touching(self, piece: "Piece", location: tuple[int, int, int]) -> int:
+        layer_idx, i, j = location
+        layer = self.board[layer_idx]
+        surrounding_tile_indices = surrounding_indices((i, j), piece)
+        return sum(1 for idx in surrounding_tile_indices if layer[idx] > 0)
+
     def validate_supported(self, piece: "Piece", location) -> bool:
         layer_index, i, j = location
         if layer_index == 0:
@@ -318,6 +324,40 @@ class Board:
             option_indices = [i for i, l in enumerate(layers) if l == max_layer]
             random_index = choice(option_indices)
             layer, i, j, r, piece_on_board = valid_moves[random_index]
+        for _ in range(r):
+            piece.rotate_by_90()
+        self.place(piece, (layer, i, j))
+        self.piece_sequence.append(
+            {"name": piece, "location": piece_on_board, "layer": layer}
+        )
+
+    def choose_move_with_most_edges_touching(self, piece: "Piece") -> None:
+        valid_moves = self.find_valid_moves(piece)
+        # print(f"TILE: {piece.name} --- {len(valid_moves)}")
+        layers = [layer for layer, *_ in valid_moves]
+
+        option_indices = range(len(valid_moves))
+        if len(set(layers)) > 1:
+            max_layer = max(layers)
+            option_indices = [i for i, l in enumerate(layers) if l == max_layer]
+
+        if piece.name in {"0", "1"}:
+            option_indices = [i for i, layer in enumerate(layers) if layer == 0]
+
+        edges = {}
+        for idx in option_indices:
+            layer, i, j, r, piece_on_board = valid_moves[idx]
+            for _ in range(r):
+                piece.rotate_by_90()
+            edges[idx] = self.num_edges_touching(piece, (layer, i, j))
+            for _ in range(4 - r):
+                piece.rotate_by_90()
+
+        max_edges = max(edges.values())
+        moves_with_max_edges = [idx for idx, v in edges.items() if v == max_edges]
+        idx = choice(moves_with_max_edges)
+        layer, i, j, r, piece_on_board = valid_moves[idx]
+
         for _ in range(r):
             piece.rotate_by_90()
         self.place(piece, (layer, i, j))
