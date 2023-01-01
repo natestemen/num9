@@ -134,6 +134,8 @@ class Board:
 
     def validate_touching(self, piece: "Piece", location) -> bool:
         layer_idx, i, j = location
+        if self.no_pieces_on_layer(layer_idx):
+            return True
         layer = self.board[layer_idx]
         surrounding_tile_indices = surrounding_indices((i, j), piece)
         touching = any(layer[idx] for idx in surrounding_tile_indices)
@@ -150,12 +152,16 @@ class Board:
         surrounding_tile_indices = surrounding_indices((i, j), piece)
         return sum(1 for idx in surrounding_tile_indices if layer[idx] > 0)
 
-    def validate_supported(self, piece: "Piece", location) -> bool:
+    def validate_supported(
+        self, piece: "Piece", location: tuple[int, int, int]
+    ) -> bool:
         layer_index, i, j = location
         if layer_index == 0:
             return True
 
-        layer_ones = self.board[layer_index].copy()
+        layer_below_index = layer_index - 1
+
+        layer_ones = self.board[layer_below_index].copy()
         layer_ones[layer_ones > 1] = 1
         piece_on_layer = Board.blank_layer_with_piece(piece, (i, j), ones=True)
         maybe = layer_ones + piece_on_layer
@@ -163,20 +169,19 @@ class Board:
         piece_tile_count = np.count_nonzero(piece.shape)
         piece_tile_overlap_count = np.count_nonzero(maybe > 1)
         if piece_tile_count == piece_tile_overlap_count:
-            # piece could be supported underneath
+            # piece is supported underneath
             overlap_count = 0
             blank_board_with_piece = Board.blank_board_with_piece(
-                piece, (layer_index, i, j), ones=True
+                piece, (layer_below_index, i, j), ones=True
             )
-            # overlap_count = sum((on_board + blank_board_with_piece).max() > 1 for on_board in self.pieces_on_layer(layer_index, ones=True))
-            for on_board in self.pieces_on_layer(layer_index, ones=True):
+            for on_board in self.pieces_on_layer(layer_below_index, ones=True):
                 maybe = on_board + blank_board_with_piece
                 if maybe.max() > 1:
                     overlap_count += 1
 
             if overlap_count >= 2:
-                if self.no_pieces_on_layer(layer_index + 1) or self.validate_touching(
-                    piece, (layer_index + 1, i, j)
+                if self.no_pieces_on_layer(layer_index) or self.validate_touching(
+                    piece, (layer_index, i, j)
                 ):
                     return True
         return False
@@ -225,8 +230,7 @@ class Board:
 
         possible_moves = []
         for layer_index, layer in enumerate(self.board):
-            if layer.max() == 0:  # and self.board[layer_index - 1].max() == 0:
-                # if layer_index > 0 and self.board[layer_index - 1].max() == 0:
+            if layer_index > 0 and self.board[layer_index - 1].max() == 0:
                 break
 
             i_start, i_stop, j_start, j_stop = self.layer_loop_indices(layer_index)
@@ -234,57 +238,16 @@ class Board:
             layer_ones[layer_ones > 1] = 1
             for rot in range(4):
                 for i, j in product(range(i_start, i_stop), range(j_start, j_stop)):
-                    blank_layer_with_piece = Board.blank_layer_with_piece(
-                        piece, (i, j), ones=True
-                    )
-                    maybe = layer_ones + blank_layer_with_piece
+                    if self.validate_touching(
+                        piece, (layer_index, i, j)
+                    ) and self.validate_supported(piece, (layer_index, i, j)):
+                        blank_board_with_piece = Board.blank_board_with_piece(
+                            piece, (layer_index, i, j)
+                        )
 
-                    if maybe.max() > 1:  # we have overlap
-                        piece_tile_count = np.count_nonzero(piece.shape)
-                        piece_tile_overlap_count = np.count_nonzero(maybe > 1)
-                        if piece_tile_count == piece_tile_overlap_count:
-                            # piece could be supported underneath
-                            overlap_count = 0
-                            blank_board_with_piece = Board.blank_board_with_piece(
-                                piece, (layer_index, i, j), ones=True
-                            )
-                            for on_board in self.pieces_on_layer(
-                                layer_index, ones=True
-                            ):
-                                maybe = on_board + blank_board_with_piece
-                                if maybe.max() > 1:
-                                    overlap_count += 1
-
-                            if overlap_count >= 2:
-                                if self.no_pieces_on_layer(
-                                    layer_index + 1
-                                ) or self.validate_touching(
-                                    piece, (layer_index + 1, i, j)
-                                ):
-                                    blank_board_with_piece = (
-                                        Board.blank_board_with_piece(
-                                            piece, (layer_index + 1, i, j)
-                                        )
-                                    )
-                                    possible_moves.append(
-                                        (
-                                            layer_index + 1,
-                                            i,
-                                            j,
-                                            rot,
-                                            blank_board_with_piece,
-                                        )
-                                    )
-
-                    elif self.validate_touching(piece, (layer_index, i, j)):
-                        if self.validate_supported(piece, (layer_index, i, j)):
-                            blank_board_with_piece = Board.blank_board_with_piece(
-                                piece, (layer_index, i, j)
-                            )
-
-                            possible_moves.append(
-                                (layer_index, i, j, rot, blank_board_with_piece)
-                            )
+                        possible_moves.append(
+                            (layer_index, i, j, rot, blank_board_with_piece)
+                        )
 
                 piece.rotate_by_90()
 

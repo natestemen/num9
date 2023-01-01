@@ -13,7 +13,10 @@ for _ in tqdm(range(100)):
     for num in tiles:
         b.choose_move_with_most_edges_touching(Piece(num))
 
+    score = b.score()
     scores.append(b.score())
+    if score > 100:
+        print(str(b))
 
 
 print(f"AVERAGE: {average(scores)}")
