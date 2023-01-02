@@ -1,8 +1,9 @@
-from game import Board, Piece
 from random import shuffle
-from tqdm import tqdm
-from numpy import average
 
+from numpy import average
+from tqdm import tqdm
+
+from num9 import Board, Piece
 
 scores = []
 

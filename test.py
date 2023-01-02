@@ -1,6 +1,8 @@
 from random import shuffle
-from game import Board, Piece
+
 import numpy as np
+
+from num9 import Board, Piece
 
 board = Board()
 

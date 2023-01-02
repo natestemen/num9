@@ -1,9 +1,12 @@
 from itertools import product
 from random import choice
-from typing import cast, Any, Iterable
+from typing import Any, Iterable
 
 import numpy as np
 import numpy.typing as npt
+
+from .piece import Piece
+from .utils import surrounding_indices
 
 BLANK_PIECE = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
 BOARD_DEPTH = 6
@@ -67,7 +70,7 @@ class Board:
 
     @classmethod
     def blank_board_with_piece(
-        cls, piece: "Piece", location: tuple[int, int, int], ones: bool = False
+        cls, piece: Piece, location: tuple[int, int, int], ones: bool = False
     ) -> npt.NDArray[np.int32]:
         bboard = cls.blank_board()
         layer, i, j = location
@@ -83,7 +86,7 @@ class Board:
 
     @classmethod
     def blank_layer_with_piece(
-        cls, piece: "Piece", location: tuple[int, int], ones: bool = False
+        cls, piece: Piece, location: tuple[int, int], ones: bool = False
     ) -> npt.NDArray[np.int32]:
         layer = cls.blank_layer()
         i, j = location
@@ -132,7 +135,7 @@ class Board:
         j_min, j_max = min(j_indices) - 4, max(j_indices) + 4
         return i_min, i_max, j_min, j_max
 
-    def validate_touching(self, piece: "Piece", location) -> bool:
+    def validate_touching(self, piece: Piece, location) -> bool:
         layer_idx, i, j = location
         if self.no_pieces_on_layer(layer_idx):
             return True
@@ -146,15 +149,13 @@ class Board:
         overlapping = any(layer[idx] for idx in indices_of_piece_on_board)
         return touching and not overlapping
 
-    def num_edges_touching(self, piece: "Piece", location: tuple[int, int, int]) -> int:
+    def num_edges_touching(self, piece: Piece, location: tuple[int, int, int]) -> int:
         layer_idx, i, j = location
         layer = self.board[layer_idx]
         surrounding_tile_indices = surrounding_indices((i, j), piece)
         return sum(1 for idx in surrounding_tile_indices if layer[idx] > 0)
 
-    def validate_supported(
-        self, piece: "Piece", location: tuple[int, int, int]
-    ) -> bool:
+    def validate_supported(self, piece: Piece, location: tuple[int, int, int]) -> bool:
         layer_index, i, j = location
         if layer_index == 0:
             return True
@@ -207,7 +208,7 @@ class Board:
         return score
 
     def find_valid_moves(
-        self, piece: "Piece"
+        self, piece: Piece
     ) -> list[tuple[int, int, int, int, npt.NDArray[np.int32]]]:
         """finds all valid moves for given piece
 
@@ -253,7 +254,7 @@ class Board:
 
         return possible_moves
 
-    def place(self, piece: "Piece", location: tuple[int, int, int]) -> None:
+    def place(self, piece: Piece, location: tuple[int, int, int]) -> None:
         height, width = np.array(piece.shape).shape
         layer, i, j = location
         self.board[layer, i : i + height, j : j + width] += piece.shape
@@ -262,7 +263,7 @@ class Board:
                 f"Placing a '{piece.name}' in that location would result in overlap"
             )
 
-    def place_randomly(self, piece: "Piece") -> None:
+    def place_randomly(self, piece: Piece) -> None:
         """finds a random valid move, and adds the piece to the board"""
         valid_moves = self.find_valid_moves(piece)
         print(len(valid_moves))
@@ -275,7 +276,7 @@ class Board:
             {"name": piece, "location": piece_on_board, "layer": layer}
         )
 
-    def go_up_randomly(self, piece: "Piece") -> None:
+    def go_up_randomly(self, piece: Piece) -> None:
         """picks a move at the highest level possible"""
         valid_moves = self.find_valid_moves(piece)
         print(len(valid_moves))
@@ -294,7 +295,7 @@ class Board:
             {"name": piece, "location": piece_on_board, "layer": layer}
         )
 
-    def choose_move_with_most_edges_touching(self, piece: "Piece") -> None:
+    def choose_move_with_most_edges_touching(self, piece: Piece) -> None:
         valid_moves = self.find_valid_moves(piece)
         # print(f"TILE: {piece.name} --- {len(valid_moves)}")
         layers = [layer for layer, *_ in valid_moves]
@@ -327,122 +328,3 @@ class Board:
         self.piece_sequence.append(
             {"name": piece, "location": piece_on_board, "layer": layer}
         )
-
-
-class Piece:
-    def __init__(self, piece):
-        self.name = str(piece)
-        self.shape: list[list[int]]
-        match piece:
-            case 0:
-                self.shape = [
-                    [10, 10, 10],
-                    [10, 0, 10],
-                    [10, 0, 10],
-                    [10, 10, 10],
-                ]
-                self.color = "grey"
-            case 1:
-                self.shape = [
-                    [0, 1, 1],
-                    [0, 0, 1],
-                    [0, 0, 1],
-                    [0, 0, 1],
-                ]
-                self.color = "brown"
-            case 2:
-                self.shape = [
-                    [0, 2, 2],
-                    [0, 2, 2],
-                    [2, 2, 0],
-                    [2, 2, 2],
-                ]
-                self.color = "orange"
-            case 3:
-                self.shape = [
-                    [3, 3, 3],
-                    [0, 0, 3],
-                    [0, 3, 3],
-                    [3, 3, 3],
-                ]
-                self.color = "yellow"
-            case 4:
-                self.shape = [
-                    [0, 4, 4],
-                    [0, 4, 0],
-                    [4, 4, 4],
-                    [0, 4, 4],
-                ]
-                self.color = "green"
-            case 5:
-                self.shape = [
-                    [5, 5, 5],
-                    [5, 5, 5],
-                    [0, 0, 5],
-                    [5, 5, 5],
-                ]
-                self.color = "light blue"
-            case 6:
-                self.shape = [
-                    [6, 6, 0],
-                    [6, 0, 0],
-                    [6, 6, 6],
-                    [6, 6, 6],
-                ]
-                self.color = "dark blue"
-            case 7:
-                self.shape = [
-                    [7, 7, 7],
-                    [0, 7, 0],
-                    [7, 7, 0],
-                    [7, 0, 0],
-                ]
-                self.color = "purple"
-            case 8:
-                self.shape = [
-                    [0, 8, 8],
-                    [0, 8, 8],
-                    [8, 8, 0],
-                    [8, 8, 0],
-                ]
-                self.color = "pink"
-            case 9:
-                self.shape = [
-                    [9, 9, 9],
-                    [9, 9, 9],
-                    [9, 9, 0],
-                    [9, 9, 0],
-                ]
-                self.color = "red"
-            case _:
-                raise ValueError(
-                    f"piece must be an integer < 10, you passed {piece} "
-                    f"of type {type(piece)}"
-                )  # TODO: error is being triggered in input rather than here
-
-    def rotate_by_90(self) -> None:
-        tuples = zip(*self.shape[::-1])
-        self.shape = [list(tup) for tup in tuples]
-
-    def non_zero_indices(self) -> Iterable[tuple[int, int]]:
-        for thing in zip(*np.where(self.shape)):
-            yield cast(tuple[int, int], thing)
-
-
-def surrounding_indices(
-    location: tuple[int, int], piece: Piece
-) -> set[tuple[int, int]]:
-    i, j = location
-    indices_of_piece_on_board = set((i + x, j + y) for x, y in piece.non_zero_indices())
-    possible_boundaries = set()
-    for i, j in indices_of_piece_on_board:
-        if i + 1 < BOARD_HEIGHT:
-            possible_boundaries.add((i + 1, j))
-        if i > 0:
-            possible_boundaries.add((i - 1, j))
-        if j + 1 < BOARD_WIDTH:
-            possible_boundaries.add((i, j + 1))
-        if j > 0:
-            possible_boundaries.add((i, j - 1))
-
-    return possible_boundaries - indices_of_piece_on_board
