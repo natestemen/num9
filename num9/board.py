@@ -19,13 +19,17 @@ class InvalidPlacementError(Exception):
 
 
 class Board:
-    def __init__(self, board=None):
+    def __init__(
+        self,
+        board: npt.NDArray[np.int32] | None = None,
+        piece_sequence: list[dict[str, Any]] = [],
+    ):
         self.board = (
             np.zeros((BOARD_DEPTH, BOARD_HEIGHT, BOARD_WIDTH), dtype=np.int32)
             if board is None
             else board
         )
-        self.piece_sequence: list[dict[str, Any]] = []
+        self.piece_sequence: list[dict[str, Any]] = piece_sequence
 
     def __str__(self):
         rows = []
@@ -321,6 +325,54 @@ class Board:
         moves_with_max_edges = [idx for idx, v in edges.items() if v == max_edges]
         idx = choice(moves_with_max_edges)
         layer, i, j, r, piece_on_board = valid_moves[idx]
+
+        for _ in range(r):
+            piece.rotate_by_90()
+        self.place(piece, (layer, i, j))
+        self.piece_sequence.append(
+            {"name": piece, "location": piece_on_board, "layer": layer}
+        )
+
+    def maximize_lookahead(self, piece: Piece) -> None:
+        valid_moves = self.find_valid_moves(piece)
+        played = [int(p["name"].name) for p in self.piece_sequence]
+        leftover = list(range(10)) * 2
+        for p in played:
+            leftover.remove(p)
+        leftover = set(leftover)
+
+        move_scores = []
+        # best_scores = []
+        for layer, i, j, r, piece_on_board in valid_moves:
+            ps = [{"name": piece, "location": piece_on_board, "layer": layer}]
+            tmp_board = Board(
+                self.board + piece_on_board, piece_sequence=self.piece_sequence + ps
+            )
+            total_score = 0
+            total_moves = 0
+            # best_score = 0
+            for p in leftover:
+                new_piece = Piece(p)
+                next_moves = tmp_board.find_valid_moves(new_piece)
+                total_moves += len(next_moves)
+                for layer, *_, pob in next_moves:
+                    psm = [{"name": new_piece, "location": pob, "layer": layer}]
+                    tmp2_board = Board(
+                        tmp_board.board + pob,
+                        piece_sequence=tmp_board.piece_sequence + psm,
+                    )
+                    total_score += tmp2_board.score()
+                    # move_score = tmp2_board.score()
+                    # if move_score > best_score:
+                    #     best_score = move_score
+
+            move_scores.append(total_score / total_moves)
+            # best_scores.append(best_score)
+
+        print(move_scores)
+        # print(best_scores)
+        best_move_index = max(enumerate(move_scores), key=lambda x: x[1])[0]
+        layer, i, j, r, piece_on_board = valid_moves[best_move_index]
 
         for _ in range(r):
             piece.rotate_by_90()

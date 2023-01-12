@@ -4,7 +4,7 @@ import numpy as np
 
 
 class Piece:
-    def __init__(self, piece):
+    def __init__(self, piece: int):
         self.name = str(piece)
         self.shape: list[list[int]]
         match piece:
