@@ -128,15 +128,17 @@ class Board:
         ]
         return np.pad(trimmed_layer, ((2, 2), (2, 2)))
 
-    def layer_loop_indices(self, layer_index: int) -> tuple[int, int, int, int]:
-        # TODO: consume piece shape
+    def layer_loop_indices(
+        self, layer_index: int, piece: Piece
+    ) -> tuple[int, int, int, int]:
         layer = self.board[layer_index]
         if layer.max() == 0:
             layer = self.board[layer_index - 1]
 
+        width, height = len(piece.shape[0]), len(piece.shape)
         i_indices, j_indices = np.nonzero(layer)
-        i_min, i_max = min(i_indices) - 4, max(i_indices) + 4
-        j_min, j_max = min(j_indices) - 4, max(j_indices) + 4
+        i_min, i_max = min(i_indices) - height, max(i_indices) + height
+        j_min, j_max = min(j_indices) - width, max(j_indices) + width
         return i_min, i_max, j_min, j_max
 
     def validate_touching(self, piece: Piece, location) -> bool:
@@ -238,7 +240,9 @@ class Board:
             if layer_index > 0 and self.board[layer_index - 1].max() == 0:
                 break
 
-            i_start, i_stop, j_start, j_stop = self.layer_loop_indices(layer_index)
+            i_start, i_stop, j_start, j_stop = self.layer_loop_indices(
+                layer_index, piece
+            )
             layer_ones = layer.copy()
             layer_ones[layer_ones > 1] = 1
             for rot in range(4):

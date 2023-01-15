@@ -18,10 +18,10 @@ class Piece:
                 self.color = "grey"
             case 1:
                 self.shape = [
-                    [0, 1, 1],
-                    [0, 0, 1],
-                    [0, 0, 1],
-                    [0, 0, 1],
+                    [1, 1],
+                    [0, 1],
+                    [0, 1],
+                    [0, 1],
                 ]
                 self.color = "brown"
             case 2:

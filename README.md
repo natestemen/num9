@@ -7,4 +7,4 @@ but in python
 | method     | average score | average duration (s) |
 | ---------- | ------------- | -------------------- |
 | random     | 1             | 2.39                 |
-| edges + up | 55            | 1.44                 |
+| edges + up | 55            | 1.21                 |
