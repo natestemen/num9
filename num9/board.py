@@ -285,7 +285,6 @@ class Board:
     def go_up_randomly(self, piece: Piece) -> None:
         """picks a move at the highest level possible"""
         valid_moves = self.find_valid_moves(piece)
-        print(len(valid_moves))
         layers = [layer for layer, *_ in valid_moves]
         if len(set(layers)) == 1:
             layer, i, j, r, piece_on_board = choice(valid_moves)
@@ -303,7 +302,6 @@ class Board:
 
     def choose_move_with_most_edges_touching(self, piece: Piece) -> None:
         valid_moves = self.find_valid_moves(piece)
-        # print(f"TILE: {piece.name} --- {len(valid_moves)}")
         layers = [layer for layer, *_ in valid_moves]
 
         option_indices = range(len(valid_moves))
