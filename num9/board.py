@@ -22,14 +22,14 @@ class Board:
     def __init__(
         self,
         board: npt.NDArray[np.int32] | None = None,
-        piece_sequence: list[dict[str, Any]] = [],
+        piece_sequence: list[dict[str, Any]] | None = None,
     ):
         self.board = (
             np.zeros((BOARD_DEPTH, BOARD_HEIGHT, BOARD_WIDTH), dtype=np.int32)
             if board is None
             else board
         )
-        self.piece_sequence: list[dict[str, Any]] = piece_sequence
+        self.piece_sequence = piece_sequence if piece_sequence else []
 
     def __str__(self):
         rows = []
@@ -270,8 +270,6 @@ class Board:
     def place_randomly(self, piece: Piece) -> None:
         """finds a random valid move, and adds the piece to the board"""
         valid_moves = self.find_valid_moves(piece)
-        print(len(valid_moves))
-        # layer, i, j, r, piece_on_board = choice(self.find_valid_moves(piece))
         layer, i, j, r, piece_on_board = choice(valid_moves)
         for _ in range(r):
             piece.rotate_by_90()
