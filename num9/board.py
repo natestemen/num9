@@ -216,7 +216,10 @@ class Board:
     def find_valid_moves(
         self, piece: Piece
     ) -> list[tuple[int, int, int, int, npt.NDArray[np.int32]]]:
-        """finds all valid moves for given piece
+        """Finds all valid moves for given piece.
+
+        Args:
+            piece: Piece to be placed on board
 
         Returns: TODO: implement this:
             list of valid moves
@@ -227,7 +230,6 @@ class Board:
                     "rotation": {0, 1, 2, 3}
                 }, ...
             ]
-
         """
         if not self.piece_sequence:
             center = self.center_coords()
@@ -240,12 +242,12 @@ class Board:
             if layer_index > 0 and self.board[layer_index - 1].max() == 0:
                 break
 
-            i_start, i_stop, j_start, j_stop = self.layer_loop_indices(
-                layer_index, piece
-            )
             layer_ones = layer.copy()
             layer_ones[layer_ones > 1] = 1
             for rot in range(4):
+                i_start, i_stop, j_start, j_stop = self.layer_loop_indices(
+                    layer_index, piece
+                )
                 for i, j in product(range(i_start, i_stop), range(j_start, j_stop)):
                     if self.validate_touching(
                         piece, (layer_index, i, j)
@@ -263,6 +265,12 @@ class Board:
         return possible_moves
 
     def place(self, piece: Piece, location: tuple[int, int, int]) -> None:
+        """Places piece on board at specified location; all in place.
+
+        Args:
+            piece: piece to be placed
+            location: tuple specifying corner on which to place piece
+        """
         height, width = np.array(piece.shape).shape
         layer, i, j = location
         self.board[layer, i : i + height, j : j + width] += piece.shape
