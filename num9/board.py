@@ -232,8 +232,7 @@ class Board:
         """
         if not self.piece_sequence:
             center = self.center_coords()
-            blank_board_with_piece = Board.blank_board_with_piece(piece, center)
-            final = center + (0, blank_board_with_piece)  # rotation, and board
+            final = center + (0,)  # rotation
             return [final]
 
         possible_moves = []
@@ -251,13 +250,7 @@ class Board:
                     if self.validate_touching(
                         piece, (layer_index, i, j)
                     ) and self.validate_supported(piece, (layer_index, i, j)):
-                        blank_board_with_piece = Board.blank_board_with_piece(
-                            piece, (layer_index, i, j)
-                        )
-
-                        possible_moves.append(
-                            (layer_index, i, j, rot, blank_board_with_piece)
-                        )
+                        possible_moves.append((layer_index, i, j, rot))
 
                 piece.rotate_by_90()
 
@@ -281,8 +274,10 @@ class Board:
     def place_randomly(self, piece: Piece) -> None:
         """finds a random valid move, and adds the piece to the board"""
         valid_moves = self.find_valid_moves(piece)
-        layer, i, j, r, piece_on_board = choice(valid_moves)
+        layer, i, j, r = choice(valid_moves)
+
         piece.rotation = r
+        piece_on_board = Board.blank_board_with_piece(piece, (layer, i, j))
         self.place(piece, (layer, i, j))
         self.piece_sequence.append(
             {"name": piece, "location": piece_on_board, "layer": layer}
@@ -293,13 +288,14 @@ class Board:
         valid_moves = self.find_valid_moves(piece)
         layers = [layer for layer, *_ in valid_moves]
         if len(set(layers)) == 1:
-            layer, i, j, r, piece_on_board = choice(valid_moves)
+            layer, i, j, r = choice(valid_moves)
         else:
             max_layer = max(layers)
             option_indices = [i for i, l in enumerate(layers) if l == max_layer]
             random_index = choice(option_indices)
-            layer, i, j, r, piece_on_board = valid_moves[random_index]
+            layer, i, j, r = valid_moves[random_index]
         piece.rotation = r
+        piece_on_board = Board.blank_board_with_piece(piece, (layer, i, j))
         self.place(piece, (layer, i, j))
         self.piece_sequence.append(
             {"name": piece, "location": piece_on_board, "layer": layer}
@@ -319,16 +315,17 @@ class Board:
 
         edges = {}
         for idx in option_indices:
-            layer, i, j, r, piece_on_board = valid_moves[idx]
+            layer, i, j, r = valid_moves[idx]
             piece.rotation = r
             edges[idx] = self.num_edges_touching(piece, (layer, i, j))
 
         max_edges = max(edges.values())
         moves_with_max_edges = [idx for idx, v in edges.items() if v == max_edges]
         idx = choice(moves_with_max_edges)
-        layer, i, j, r, piece_on_board = valid_moves[idx]
+        layer, i, j, r = valid_moves[idx]
 
         piece.rotation = r
+        piece_on_board = Board.blank_board_with_piece(piece, (layer, i, j))
         self.place(piece, (layer, i, j))
         self.piece_sequence.append(
             {"name": piece, "location": piece_on_board, "layer": layer}
@@ -344,7 +341,9 @@ class Board:
 
         move_scores = []
         # best_scores = []
-        for layer, i, j, r, piece_on_board in valid_moves:
+        for layer, i, j, r in valid_moves:
+            piece.rotation = r
+            piece_on_board = Board.blank_board_with_piece(piece, (layer, i, j))
             ps = [{"name": piece, "location": piece_on_board, "layer": layer}]
             tmp_board = Board(
                 self.board + piece_on_board, piece_sequence=self.piece_sequence + ps
@@ -356,8 +355,10 @@ class Board:
                 new_piece = Piece(p)
                 next_moves = tmp_board.find_valid_moves(new_piece)
                 total_moves += len(next_moves)
-                for layer, *_, pob in next_moves:
-                    psm = [{"name": new_piece, "location": pob, "layer": layer}]
+                for nlayer, ii, jj, rr in next_moves:
+                    piece.rotation = rr
+                    pob = Board.blank_board_with_piece(piece, (nlayer, ii, jj))
+                    psm = [{"name": new_piece, "location": pob, "layer": nlayer}]
                     tmp2_board = Board(
                         tmp_board.board + pob,
                         piece_sequence=tmp_board.piece_sequence + psm,
