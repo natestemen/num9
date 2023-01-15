@@ -6,7 +6,6 @@ import numpy as np
 import numpy.typing as npt
 
 from .piece import Piece
-from .utils import surrounding_indices
 
 BLANK_PIECE = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]
 BOARD_DEPTH = 6
@@ -78,8 +77,8 @@ class Board:
     ) -> npt.NDArray[np.int32]:
         bboard = cls.blank_board()
         layer, i, j = location
-        piece_height, piece_width = len(piece.shape), len(piece.shape[0])
-        bboard[layer, i : i + piece_height, j : j + piece_width] = piece.shape
+        piece_height, piece_width = piece.dimensions
+        bboard[layer, i : i + piece_height, j : j + piece_width] = piece.array
         if ones:
             bboard[bboard > 1] = 1
         return bboard
@@ -94,8 +93,8 @@ class Board:
     ) -> npt.NDArray[np.int32]:
         layer = cls.blank_layer()
         i, j = location
-        piece_height, piece_width = len(piece.shape), len(piece.shape[0])
-        layer[i : i + piece_height, j : j + piece_width] = piece.shape
+        piece_height, piece_width = piece.dimensions
+        layer[i : i + piece_height, j : j + piece_width] = piece.array
         if ones:
             layer[layer > 1] = 1
         return layer
@@ -135,7 +134,7 @@ class Board:
         if layer.max() == 0:
             layer = self.board[layer_index - 1]
 
-        width, height = len(piece.shape[0]), len(piece.shape)
+        height, width = piece.dimensions
         i_indices, j_indices = np.nonzero(layer)
         i_min, i_max = min(i_indices) - height, max(i_indices) + height
         j_min, j_max = min(j_indices) - width, max(j_indices) + width
@@ -146,7 +145,7 @@ class Board:
         if self.no_pieces_on_layer(layer_idx):
             return True
         layer = self.board[layer_idx]
-        surrounding_tile_indices = surrounding_indices((i, j), piece)
+        surrounding_tile_indices = piece.surrounding_indices((i, j))
         touching = any(layer[idx] for idx in surrounding_tile_indices)
 
         indices_of_piece_on_board = set(
@@ -158,7 +157,7 @@ class Board:
     def num_edges_touching(self, piece: Piece, location: tuple[int, int, int]) -> int:
         layer_idx, i, j = location
         layer = self.board[layer_idx]
-        surrounding_tile_indices = surrounding_indices((i, j), piece)
+        surrounding_tile_indices = piece.surrounding_indices((i, j))
         return sum(1 for idx in surrounding_tile_indices if layer[idx] > 0)
 
     def validate_supported(self, piece: Piece, location: tuple[int, int, int]) -> bool:
@@ -173,7 +172,7 @@ class Board:
         piece_on_layer = Board.blank_layer_with_piece(piece, (i, j), ones=True)
         maybe = layer_ones + piece_on_layer
 
-        piece_tile_count = np.count_nonzero(piece.shape)
+        piece_tile_count = np.count_nonzero(piece.array)
         piece_tile_overlap_count = np.count_nonzero(maybe > 1)
         if piece_tile_count == piece_tile_overlap_count:
             # piece is supported underneath
@@ -271,9 +270,9 @@ class Board:
             piece: piece to be placed
             location: tuple specifying corner on which to place piece
         """
-        height, width = np.array(piece.shape).shape
+        height, width = piece.dimensions
         layer, i, j = location
-        self.board[layer, i : i + height, j : j + width] += piece.shape
+        self.board[layer, i : i + height, j : j + width] += piece.array
         if self.board.max() > 10:
             raise InvalidPlacementError(
                 f"Placing a '{piece.name}' in that location would result in overlap"
@@ -283,8 +282,7 @@ class Board:
         """finds a random valid move, and adds the piece to the board"""
         valid_moves = self.find_valid_moves(piece)
         layer, i, j, r, piece_on_board = choice(valid_moves)
-        for _ in range(r):
-            piece.rotate_by_90()
+        piece.rotation = r
         self.place(piece, (layer, i, j))
         self.piece_sequence.append(
             {"name": piece, "location": piece_on_board, "layer": layer}
@@ -301,8 +299,7 @@ class Board:
             option_indices = [i for i, l in enumerate(layers) if l == max_layer]
             random_index = choice(option_indices)
             layer, i, j, r, piece_on_board = valid_moves[random_index]
-        for _ in range(r):
-            piece.rotate_by_90()
+        piece.rotation = r
         self.place(piece, (layer, i, j))
         self.piece_sequence.append(
             {"name": piece, "location": piece_on_board, "layer": layer}
@@ -323,19 +320,15 @@ class Board:
         edges = {}
         for idx in option_indices:
             layer, i, j, r, piece_on_board = valid_moves[idx]
-            for _ in range(r):
-                piece.rotate_by_90()
+            piece.rotation = r
             edges[idx] = self.num_edges_touching(piece, (layer, i, j))
-            for _ in range(4 - r):
-                piece.rotate_by_90()
 
         max_edges = max(edges.values())
         moves_with_max_edges = [idx for idx, v in edges.items() if v == max_edges]
         idx = choice(moves_with_max_edges)
         layer, i, j, r, piece_on_board = valid_moves[idx]
 
-        for _ in range(r):
-            piece.rotate_by_90()
+        piece.rotation = r
         self.place(piece, (layer, i, j))
         self.piece_sequence.append(
             {"name": piece, "location": piece_on_board, "layer": layer}
@@ -382,8 +375,7 @@ class Board:
         best_move_index = max(enumerate(move_scores), key=lambda x: x[1])[0]
         layer, i, j, r, piece_on_board = valid_moves[best_move_index]
 
-        for _ in range(r):
-            piece.rotate_by_90()
+        piece.rotation = r
         self.place(piece, (layer, i, j))
         self.piece_sequence.append(
             {"name": piece, "location": piece_on_board, "layer": layer}

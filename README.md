@@ -12,4 +12,4 @@ usually generated from a sequence of 100 random games.
 | ---------- | ------------- | -------------------- |
 | random     | 1             | 2.39                 |
 | up         | 14            | 1.49                 |
-| edges + up | 55            | 1.21                 |
+| edges + up | 55            | 1.40                 |
