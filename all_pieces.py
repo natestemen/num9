@@ -2,6 +2,7 @@ import numpy as np
 import numpy.typing as npt
 from typing import Sequence
 import random
+import itertools
 
 PieceArray = npt.NDArray[np.int32]
 
@@ -64,20 +65,36 @@ def validate_contiguous(arr: PieceArray):
     return len(reachable) == len(nonzero_indices)
 
 
-count = 0
+def rotate(arr: PieceArray):
+    tuples = zip(*arr[::-1])
+    array = [list(tup) for tup in tuples]
+    return array
+
+
+def rotational_symmetry(a1: PieceArray, a2: PieceArray) -> bool:
+    return np.array_equal(a1, a2) or np.array_equal(a1, rotate(rotate(a2)))
+
+
 pieces = []
+num_tiles = {i: [] for i in range(6, 13)}
 for i in range(1, 2**12):
     bitstring = format(i, "012b")
     arr = encode_random_to_array(bitstring)
     if validate_size(arr) and validate_contiguous(arr):
         pieces.append(arr.tolist())
-        count += 1
+        nonzero_indices = list(zip(*np.nonzero(arr)))
+        num_tiles[len(nonzero_indices)].append(bitstring)
 
-# TODO: still need to eliminate pieces that are rotations of each other
-# probably want a dict {num_missing_blocks: [list of pieces]} to search
-# through when looking for pieces that might be rotations to then eliminate
+# print(num_tiles)
+for num_nonzero, bitstrings in num_tiles.items():
+    for b1, b2 in itertools.combinations(bitstrings, 2):
+        a1, a2 = encode_random_to_array(b1), encode_random_to_array(b2)
+        if rotational_symmetry(a1, a2):
+            pieces.remove(a2.tolist())
 
-print(count)
+print(pieces)
+print(len(pieces))
+
 import json
 
 with open("all_pieces.json", "w") as f:
