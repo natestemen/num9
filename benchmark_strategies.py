@@ -11,6 +11,13 @@ from statistics import mean, median
 from typing import Callable
 
 from num9 import Board, Piece
+from num9.strategies import (
+    choose_move_with_most_edges_touching,
+    choose_solid_base_high_top,
+    go_up_randomly,
+    maximize_lookahead,
+    place_randomly,
+)
 from tqdm import trange
 
 
@@ -102,7 +109,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Benchmark num9 strategies over random games."
     )
-    parser.add_argument("--games", type=int, default=1000, help="Games per strategy.")
+    parser.add_argument("--games", type=int, default=100, help="Games per strategy.")
     parser.add_argument("--seed", type=int, default=None, help="Optional random seed.")
     parser.add_argument(
         "--update-readme",
@@ -123,11 +130,11 @@ def main() -> None:
         random.seed(args.seed)
 
     strategies: list[tuple[str, Callable[[Board, Piece], None]]] = [
-        ("place_randomly", lambda b, p: b.place_randomly(p)),
-        ("go_up_randomly", lambda b, p: b.go_up_randomly(p)),
-        ("edges_then_up", lambda b, p: b.choose_move_with_most_edges_touching(p)),
-        ("solid_base_high_top", lambda b, p: b.choose_solid_base_high_top(p)),
-        # ("maximize_lookahead", lambda b, p: b.maximize_lookahead(p)),
+        ("place_randomly", place_randomly),
+        ("go_up_randomly", go_up_randomly),
+        ("edges_then_up", choose_move_with_most_edges_touching),
+        ("solid_base_high_top", choose_solid_base_high_top),
+        # ("maximize_lookahead", maximize_lookahead),
     ]
 
     results = []

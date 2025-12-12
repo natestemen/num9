@@ -4,6 +4,7 @@ from numpy import average
 from tqdm import tqdm
 
 from num9 import Board, Piece
+from num9.strategies import choose_move_with_most_edges_touching
 
 scores = []
 
@@ -12,7 +13,8 @@ for _ in tqdm(range(100)):
     b = Board()
     shuffle(tiles)
     for num in tiles:
-        b.choose_move_with_most_edges_touching(Piece(num))
+        piece = Piece(num)
+        choose_move_with_most_edges_touching(b, piece)
 
     score = b.score()
     scores.append(b.score())

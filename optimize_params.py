@@ -10,6 +10,7 @@ import statistics
 from random import Random
 
 from num9 import Board, Piece
+from num9.strategies import choose_solid_base_high_top
 
 WEIGHT_RANGES = {
     "fill_weight": (0.2, 1.2),
@@ -45,7 +46,7 @@ def play_game(weights: dict[str, float], rng: Random) -> int:
     board = Board()
     for num in tiles:
         piece = Piece(num)
-        board.choose_solid_base_high_top(piece, **weights)
+        choose_solid_base_high_top(board, piece, **weights)
     return board.score()
 
 
