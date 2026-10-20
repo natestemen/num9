@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "num9-core"
+version = "0.1.0"
+description = "Fast NMBR 9 engine and strategies (Rust core for num9)"
+requires-python = ">=3.10"
+
+[tool.maturin]
+features = ["python"]
+module-name = "num9_core"
