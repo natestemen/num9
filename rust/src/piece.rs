@@ -27,6 +27,10 @@ pub struct Shape {
     /// enclosed holes), matching `Piece.surrounding_indices`. `ring[rr]` bit `c`
     /// refers to the cell at offset (rr - 1, c - 1) from the piece's top-left.
     pub ring: [u8; 6],
+    /// `h_pairs[r]` bit `c`: tiles at (r, c) and (r, c + 1) are both present.
+    pub h_pairs: [u8; 4],
+    /// `v_pairs[r]` bit `c`: tiles at (r, c) and (r + 1, c) are both present.
+    pub v_pairs: [u8; 4],
     pub tiles: u32,
 }
 
@@ -59,11 +63,18 @@ impl Shape {
             ring[rr] = d & !padded[rr];
         }
         let tiles = rows.iter().map(|r| r.count_ones()).sum();
+        let h_pairs = rows.map(|r| r & (r >> 1));
+        let mut v_pairs = [0u8; 4];
+        for r in 0..h.saturating_sub(1) {
+            v_pairs[r] = rows[r] & rows[r + 1];
+        }
         Shape {
             h,
             w,
             rows,
             ring,
+            h_pairs,
+            v_pairs,
             tiles,
         }
     }
@@ -136,6 +147,31 @@ mod tests {
                 r = rotate(&r);
             }
             assert_eq!(g, r);
+        }
+    }
+
+    /// Move generation's "rests on two pieces" check relies on every piece
+    /// being one orthogonally connected shape.
+    #[test]
+    fn shapes_are_connected() {
+        for v in 0..10u8 {
+            for r in 0..4 {
+                let s = shape(v, r);
+                let cells: Vec<_> = s.cells().collect();
+                let mut seen = vec![cells[0]];
+                let mut k = 0;
+                while k < seen.len() {
+                    let (a, b) = seen[k];
+                    for &c in &cells {
+                        let near = a.abs_diff(c.0) + b.abs_diff(c.1) == 1;
+                        if near && !seen.contains(&c) {
+                            seen.push(c);
+                        }
+                    }
+                    k += 1;
+                }
+                assert_eq!(seen.len(), cells.len(), "piece {v} rotation {r}");
+            }
         }
     }
 
