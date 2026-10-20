@@ -1,2 +1,3 @@
 __pycache__
-.mypy_cacherust/target
+.mypy_cache
+rust/target
