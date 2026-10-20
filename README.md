@@ -64,11 +64,11 @@ documents how they were made).
 <!-- benchmarks:start -->
 | strategy | games | avg | median | min | max | time (s) | games/s |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| place_randomly | 1000 | 1.10 | 0.00 | 0 | 15 | 0.90 | 1105.44 |
-| go_up_randomly | 1000 | 14.90 | 13.00 | 1 | 57 | 0.85 | 1182.28 |
-| edges_then_up | 1000 | 56.78 | 55.00 | 23 | 97 | 0.71 | 1409.81 |
-| solid_base_high_top | 1000 | 48.93 | 47.00 | 14 | 107 | 0.84 | 1191.23 |
-| maximize_lookahead | 1000 | 60.21 | 59.00 | 30 | 113 | 825.66 | 1.21 |
+| place_randomly | 1000 | 1.10 | 0.00 | 0 | 15 | 0.14 | 7137.15 |
+| go_up_randomly | 1000 | 14.90 | 13.00 | 1 | 57 | 0.15 | 6628.12 |
+| edges_then_up | 1000 | 56.78 | 55.00 | 23 | 97 | 0.18 | 5687.76 |
+| solid_base_high_top | 1000 | 48.93 | 47.00 | 14 | 107 | 0.23 | 4379.39 |
+| maximize_lookahead | 1000 | 60.21 | 59.00 | 30 | 113 | 86.25 | 11.59 |
 <!-- benchmarks:end -->
 
 ## history
