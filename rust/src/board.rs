@@ -4,6 +4,7 @@
 //! so overlap, adjacency and support checks are a handful of word operations.
 
 use std::fmt;
+use std::ops::Range;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, Shl, Shr};
 
 use crate::piece::{shape, Shape};
@@ -279,10 +280,11 @@ impl Board {
             f(Self::center_move());
             return;
         }
-        let mut single = Vec::new();
         let mut cur64 = [0u64; HEIGHT];
         let mut adj64 = [0u64; HEIGHT];
         let mut below64 = [0u64; HEIGHT];
+        let mut seam_h64 = [0u64; HEIGHT];
+        let mut seam_v64 = [0u64; HEIGHT];
         for layer in 0..DEPTH {
             if layer > 0 && self.layer_is_empty(layer - 1) {
                 break;
@@ -299,22 +301,50 @@ impl Board {
             let rows = bb.min_i.saturating_sub(5)..(bb.max_i + 9).min(HEIGHT);
             let occ = &self.occ[layer];
             if bb.max_j + 8 <= base + 64 {
-                for r in rows {
+                for r in rows.clone() {
                     cur64[r] = (occ[r] >> base) as u64;
                     adj64[r] = (Self::adjacent(occ, r) >> base) as u64;
                     if layer > 0 {
                         below64[r] = (self.occ[layer - 1][r] >> base) as u64;
+                        seam_h64[r] = 0;
+                        seam_v64[r] = 0;
                     }
                 }
-                let maps = (&cur64, &adj64, &below64);
-                self.scan_layer(value, layer, bb, base, maps, &mut single, &mut f);
+                if layer > 0 {
+                    self.seams(layer - 1, rows, |r, h, v| {
+                        seam_h64[r] |= (h >> base) as u64;
+                        seam_v64[r] |= (v >> base) as u64;
+                    });
+                }
+                let maps = LayerMaps {
+                    cur: &cur64,
+                    adj: &adj64,
+                    below: &below64,
+                    seam_h: &seam_h64,
+                    seam_v: &seam_v64,
+                };
+                self.scan_layer(value, layer, bb, base, maps, &mut f);
             } else {
                 let mut adj = [0u128; HEIGHT];
-                for r in rows {
+                let mut seam_h = [0u128; HEIGHT];
+                let mut seam_v = [0u128; HEIGHT];
+                for r in rows.clone() {
                     adj[r] = Self::adjacent(occ, r);
                 }
-                let maps = (occ, &adj, &self.occ[layer.saturating_sub(1)]);
-                self.scan_layer(value, layer, bb, 0, maps, &mut single, &mut f);
+                if layer > 0 {
+                    self.seams(layer - 1, rows, |r, h, v| {
+                        seam_h[r] |= h;
+                        seam_v[r] |= v;
+                    });
+                }
+                let maps = LayerMaps {
+                    cur: occ,
+                    adj: &adj,
+                    below: &self.occ[layer.saturating_sub(1)],
+                    seam_h: &seam_h,
+                    seam_v: &seam_v,
+                };
+                self.scan_layer(value, layer, bb, 0, maps, &mut f);
             }
         }
     }
@@ -327,21 +357,50 @@ impl Board {
         (up | down | (occ[r] << 1) | (occ[r] >> 1)) & COL_MASK
     }
 
-    /// Emit the legal moves on one layer. `maps` holds this layer's occupied
-    /// cells, the cells adjacent to them, and the layer below's occupied cells,
-    /// all shifted right by `base` columns.
-    #[allow(clippy::too_many_arguments)]
+    /// Calls `put(row, h, v)` with the seams between different pieces of
+    /// `layer` in each of `rows` (several calls per row; OR them together):
+    /// `h` bit `j` = cells (row, j) and (row, j + 1) are on different pieces,
+    /// `v` bit `j` = cells (row, j) and (row + 1, j) are on different pieces.
+    fn seams(&self, layer: usize, rows: Range<usize>, mut put: impl FnMut(usize, u128, u128)) {
+        let occ = &self.occ[layer];
+        for p in self.pieces.iter().filter(|p| p.mv.layer == layer) {
+            let s = shape(p.value, p.mv.rot);
+            let lo = p.mv.i.max(rows.start);
+            let hi = (p.mv.i + s.h).min(rows.end);
+            for r in lo..hi {
+                let k = r - p.mv.i;
+                let mine = Self::row_mask(s, k, p.mv.j);
+                let mine_below = if k + 1 < s.h {
+                    Self::row_mask(s, k + 1, p.mv.j)
+                } else {
+                    0
+                };
+                let occ_below = if r + 1 < HEIGHT { occ[r + 1] } else { 0 };
+                // Each seam is found from the piece on its left (or top) side.
+                let h = mine & (occ[r] >> 1) & !(mine >> 1);
+                let v = mine & occ_below & !mine_below;
+                put(r, h, v);
+            }
+        }
+    }
+
+    /// Emit the legal moves on one layer (see [`LayerMaps`]).
     fn scan_layer<W: Word>(
         &self,
         value: u8,
         layer: usize,
         bb: BBox,
         base: usize,
-        maps: (&[W; HEIGHT], &[W; HEIGHT], &[W; HEIGHT]),
-        single: &mut Vec<(usize, u128)>,
+        maps: LayerMaps<'_, W>,
         f: &mut impl FnMut(Move),
     ) {
-        let (cur, adj, below) = maps;
+        let LayerMaps {
+            cur,
+            adj,
+            below,
+            seam_h,
+            seam_v,
+        } = maps;
         let cur_empty = self.layer_is_empty(layer);
         for rot in 0..4 {
             let s = shape(value, rot);
@@ -360,14 +419,16 @@ impl Board {
                 let below_bb = self.bbox[layer - 1].unwrap();
                 i_lo = i_lo.max(below_bb.min_i);
                 i_hi = i_hi.min((below_bb.max_i + 2).saturating_sub(s.h));
-                self.single_piece_positions(s, layer - 1, single);
             }
             for i in i_lo..i_hi {
                 let mut ok = window;
                 if layer > 0 {
+                    // Fully supported, and (pieces being connected shapes)
+                    // resting on two pieces exactly when some pair of
+                    // neighbouring tiles straddles a seam between them.
                     ok &= all_tiles(below, s, i);
-                    for &(_, m) in single.iter().filter(|(si, _)| *si == i) {
-                        ok &= !W::from_u128(m >> base);
+                    if ok != W::ZERO {
+                        ok &= any_pair(seam_h, seam_v, s, i);
                     }
                 }
                 if ok != W::ZERO && !cur_empty {
@@ -384,32 +445,6 @@ impl Board {
                         rot,
                     ));
                     ok = ok.clear_lowest();
-                }
-            }
-        }
-    }
-
-    /// Positions (as `(row, column mask)`) where `s` would rest entirely on a
-    /// single piece of `layer`, i.e. fail the "two pieces below" rule.
-    fn single_piece_positions(&self, s: &Shape, layer: usize, out: &mut Vec<(usize, u128)>) {
-        out.clear();
-        for p in self.pieces.iter().filter(|p| p.mv.layer == layer) {
-            let ps = shape(p.value, p.mv.rot);
-            if ps.h < s.h || ps.tiles < s.tiles {
-                continue;
-            }
-            for i in p.mv.i..=p.mv.i + ps.h - s.h {
-                let mut m = !0u128;
-                for r in 0..s.h {
-                    let x = Self::row_mask(ps, i + r - p.mv.i, p.mv.j);
-                    let mut bits = s.rows[r];
-                    while bits != 0 {
-                        m &= x >> bits.trailing_zeros();
-                        bits &= bits - 1;
-                    }
-                }
-                if m != 0 {
-                    out.push((i, m));
                 }
             }
         }
@@ -537,6 +572,39 @@ fn all_tiles<W: Word>(rows: &[W; HEIGHT], s: &Shape, i: usize) -> W {
         let mut bits = s.rows[r];
         while bits != 0 {
             m &= x >> bits.trailing_zeros();
+            bits &= bits - 1;
+        }
+    }
+    m
+}
+
+/// Row bitmaps for scanning one layer, all shifted right by the same base column.
+struct LayerMaps<'a, W> {
+    /// Occupied cells of the layer.
+    cur: &'a [W; HEIGHT],
+    /// Cells orthogonally adjacent to an occupied cell of the layer.
+    adj: &'a [W; HEIGHT],
+    /// Occupied cells of the layer below.
+    below: &'a [W; HEIGHT],
+    /// Seams between pieces of the layer below (see `Board::seams`).
+    seam_h: &'a [W; HEIGHT],
+    seam_v: &'a [W; HEIGHT],
+}
+
+/// Bit `j`: some pair of neighbouring tiles of `s` at (`i`, `j`) straddles a seam.
+#[inline]
+fn any_pair<W: Word>(seam_h: &[W; HEIGHT], seam_v: &[W; HEIGHT], s: &Shape, i: usize) -> W {
+    let mut m = W::ZERO;
+    for r in 0..s.h {
+        let (x, y) = (seam_h[i + r], seam_v[i + r]);
+        let mut bits = s.h_pairs[r];
+        while bits != 0 {
+            m |= x >> bits.trailing_zeros();
+            bits &= bits - 1;
+        }
+        let mut bits = s.v_pairs[r];
+        while bits != 0 {
+            m |= y >> bits.trailing_zeros();
             bits &= bits - 1;
         }
     }
