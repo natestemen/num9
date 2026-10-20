@@ -4,6 +4,7 @@
 //! so overlap, adjacency and support checks are a handful of word operations.
 
 use std::fmt;
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, Shl, Shr};
 
 use crate::piece::{shape, Shape};
 
@@ -271,6 +272,8 @@ impl Board {
             return;
         }
         let mut single = Vec::new();
+        let mut cur64 = [0u64; HEIGHT];
+        let mut below64 = [0u64; HEIGHT];
         for layer in 0..DEPTH {
             if layer > 0 && self.layer_is_empty(layer - 1) {
                 break;
@@ -279,92 +282,100 @@ impl Board {
             let bb = self.bbox[layer]
                 .or(self.bbox[layer.saturating_sub(1)])
                 .unwrap();
-            let cur = &self.occ[layer];
-            let cur_empty = self.layer_is_empty(layer);
-            for rot in 0..4 {
-                let s = shape(value, rot);
-                // Python searches `range(min - size, max + size)`; positions outside
-                // the board are clipped (Python's behaviour there is undefined).
-                let mut i_lo = bb.min_i.saturating_sub(s.h);
-                let mut i_hi = (bb.max_i + s.h).min(HEIGHT - s.h + 1);
-                let j_lo = bb.min_j.saturating_sub(s.w);
-                let j_hi = (bb.max_j + s.w).min(WIDTH - s.w + 1);
-                if j_lo >= j_hi {
-                    continue;
-                }
-                let window = ((1u128 << j_hi) - 1) & !((1u128 << j_lo) - 1);
-                if layer > 0 {
-                    // A fully supported piece lies within the layer below's rows.
-                    let below = self.bbox[layer - 1].unwrap();
-                    i_lo = i_lo.max(below.min_i);
-                    i_hi = i_hi.min((below.max_i + 2).saturating_sub(s.h));
-                    self.single_piece_positions(s, layer - 1, &mut single);
-                }
-                for i in i_lo..i_hi {
-                    let mut ok = window;
+            // Pieces are at most 4 cells across, so the scan reads columns
+            // `bb.min_j - 5 ..= bb.max_j + 7` and rows `bb.min_i - 5 .. bb.max_i + 9`.
+            // When those columns fit in 64 bits (always, in practice), scan a
+            // 64-bit copy of them: u64 shifts are much cheaper than u128 ones.
+            let base = bb.min_j.saturating_sub(5);
+            if bb.max_j + 8 <= base + 64 {
+                for r in bb.min_i.saturating_sub(5)..(bb.max_i + 9).min(HEIGHT) {
+                    cur64[r] = (self.occ[layer][r] >> base) as u64;
                     if layer > 0 {
-                        ok &= Self::all_tiles(&self.occ[layer - 1], s, i);
-                        for &(_, m) in single.iter().filter(|(si, _)| *si == i) {
-                            ok &= !m;
-                        }
+                        below64[r] = (self.occ[layer - 1][r] >> base) as u64;
                     }
-                    if ok != 0 && !cur_empty {
-                        ok &= !Self::any_tile(cur, s, i) & Self::any_ring(cur, s, i);
+                }
+                self.scan_layer(
+                    value,
+                    layer,
+                    bb,
+                    base,
+                    &cur64,
+                    &below64,
+                    &mut single,
+                    &mut f,
+                );
+            } else {
+                let below = &self.occ[layer.saturating_sub(1)];
+                self.scan_layer(
+                    value,
+                    layer,
+                    bb,
+                    0,
+                    &self.occ[layer],
+                    below,
+                    &mut single,
+                    &mut f,
+                );
+            }
+        }
+    }
+
+    /// Emit the legal moves on one layer. `cur` and `below` hold this layer's
+    /// and the layer below's rows, shifted right by `base` columns.
+    #[allow(clippy::too_many_arguments)]
+    fn scan_layer<W: Word>(
+        &self,
+        value: u8,
+        layer: usize,
+        bb: BBox,
+        base: usize,
+        cur: &[W; HEIGHT],
+        below: &[W; HEIGHT],
+        single: &mut Vec<(usize, u128)>,
+        f: &mut impl FnMut(Move),
+    ) {
+        let cur_empty = self.layer_is_empty(layer);
+        for rot in 0..4 {
+            let s = shape(value, rot);
+            // Python searches `range(min - size, max + size)`; positions outside
+            // the board are clipped (Python's behaviour there is undefined).
+            let mut i_lo = bb.min_i.saturating_sub(s.h);
+            let mut i_hi = (bb.max_i + s.h).min(HEIGHT - s.h + 1);
+            let j_lo = bb.min_j.saturating_sub(s.w);
+            let j_hi = (bb.max_j + s.w).min(WIDTH - s.w + 1);
+            if j_lo >= j_hi {
+                continue;
+            }
+            let window = W::from_u128((((1u128 << j_hi) - 1) & !((1u128 << j_lo) - 1)) >> base);
+            if layer > 0 {
+                // A fully supported piece lies within the layer below's rows.
+                let below_bb = self.bbox[layer - 1].unwrap();
+                i_lo = i_lo.max(below_bb.min_i);
+                i_hi = i_hi.min((below_bb.max_i + 2).saturating_sub(s.h));
+                self.single_piece_positions(s, layer - 1, single);
+            }
+            for i in i_lo..i_hi {
+                let mut ok = window;
+                if layer > 0 {
+                    ok &= all_tiles(below, s, i);
+                    for &(_, m) in single.iter().filter(|(si, _)| *si == i) {
+                        ok &= !W::from_u128(m >> base);
                     }
-                    while ok != 0 {
-                        f(Move::new(layer, i, ok.trailing_zeros() as usize, rot));
-                        ok &= ok - 1;
-                    }
+                }
+                if ok != W::ZERO && !cur_empty {
+                    ok &= !any_tile(cur, s, i) & any_ring(cur, s, i);
+                }
+                while ok != W::ZERO {
+                    f(Move::new(
+                        layer,
+                        i,
+                        ok.trailing_zeros() as usize + base,
+                        rot,
+                    ));
+                    ok = ok.clear_lowest();
                 }
             }
         }
-    }
-
-    /// Bit `j`: every tile of `s` at (`i`, `j`) lies on a set cell of `rows`.
-    #[inline]
-    fn all_tiles(rows: &[u128; HEIGHT], s: &Shape, i: usize) -> u128 {
-        let mut m = !0u128;
-        for r in 0..s.h {
-            let x = rows[i + r];
-            let mut bits = s.rows[r];
-            while bits != 0 {
-                m &= x >> bits.trailing_zeros();
-                bits &= bits - 1;
-            }
-        }
-        m
-    }
-
-    /// Bit `j`: some tile of `s` at (`i`, `j`) lies on a set cell of `rows`.
-    #[inline]
-    fn any_tile(rows: &[u128; HEIGHT], s: &Shape, i: usize) -> u128 {
-        let mut m = 0u128;
-        for r in 0..s.h {
-            let x = rows[i + r];
-            let mut bits = s.rows[r];
-            while bits != 0 {
-                m |= x >> bits.trailing_zeros();
-                bits &= bits - 1;
-            }
-        }
-        m
-    }
-
-    /// Bit `j`: some neighbour of `s` at (`i`, `j`) lies on a set cell of `rows`.
-    #[inline]
-    fn any_ring(rows: &[u128; HEIGHT], s: &Shape, i: usize) -> u128 {
-        let mut m = 0u128;
-        for (row, rr) in Self::ring_rows(s, i) {
-            let x = rows[row];
-            let mut bits = s.ring[rr];
-            while bits != 0 {
-                // Ring bit `c` is column offset `c - 1` from the piece.
-                let c = bits.trailing_zeros();
-                m |= if c == 0 { x << 1 } else { x >> (c - 1) };
-                bits &= bits - 1;
-            }
-        }
-        m
     }
 
     /// Positions (as `(row, column mask)`) where `s` would rest entirely on a
@@ -444,6 +455,96 @@ impl Board {
         }
         out
     }
+}
+
+/// A row of cells as a bitset (bit `j` = column `j`, relative to some base).
+trait Word:
+    Copy
+    + PartialEq
+    + BitAnd<Output = Self>
+    + BitAndAssign
+    + BitOr<Output = Self>
+    + BitOrAssign
+    + Not<Output = Self>
+    + Shl<u32, Output = Self>
+    + Shr<u32, Output = Self>
+{
+    const ZERO: Self;
+    const ONES: Self;
+    /// Keep the low bits that fit (truncating).
+    fn from_u128(x: u128) -> Self;
+    fn trailing_zeros(self) -> u32;
+    fn clear_lowest(self) -> Self;
+}
+
+macro_rules! impl_word {
+    ($t:ty) => {
+        impl Word for $t {
+            const ZERO: Self = 0;
+            const ONES: Self = !0;
+            #[inline]
+            fn from_u128(x: u128) -> Self {
+                x as $t
+            }
+            #[inline]
+            fn trailing_zeros(self) -> u32 {
+                <$t>::trailing_zeros(self)
+            }
+            #[inline]
+            fn clear_lowest(self) -> Self {
+                self & self.wrapping_sub(1)
+            }
+        }
+    };
+}
+impl_word!(u64);
+impl_word!(u128);
+
+/// Bit `j`: every tile of `s` at (`i`, `j`) lies on a set cell of `rows`.
+#[inline]
+fn all_tiles<W: Word>(rows: &[W; HEIGHT], s: &Shape, i: usize) -> W {
+    let mut m = W::ONES;
+    for r in 0..s.h {
+        let x = rows[i + r];
+        let mut bits = s.rows[r];
+        while bits != 0 {
+            m &= x >> bits.trailing_zeros();
+            bits &= bits - 1;
+        }
+    }
+    m
+}
+
+/// Bit `j`: some tile of `s` at (`i`, `j`) lies on a set cell of `rows`.
+#[inline]
+fn any_tile<W: Word>(rows: &[W; HEIGHT], s: &Shape, i: usize) -> W {
+    let mut m = W::ZERO;
+    for r in 0..s.h {
+        let x = rows[i + r];
+        let mut bits = s.rows[r];
+        while bits != 0 {
+            m |= x >> bits.trailing_zeros();
+            bits &= bits - 1;
+        }
+    }
+    m
+}
+
+/// Bit `j`: some neighbour of `s` at (`i`, `j`) lies on a set cell of `rows`.
+#[inline]
+fn any_ring<W: Word>(rows: &[W; HEIGHT], s: &Shape, i: usize) -> W {
+    let mut m = W::ZERO;
+    for (row, rr) in Board::ring_rows(s, i) {
+        let x = rows[row];
+        let mut bits = s.ring[rr];
+        while bits != 0 {
+            // Ring bit `c` is column offset `c - 1` from the piece.
+            let c = bits.trailing_zeros();
+            m |= if c == 0 { x << 1 } else { x >> (c - 1) };
+            bits &= bits - 1;
+        }
+    }
+    m
 }
 
 /// Emoji rendering, as the Python `Board.__str__` printed it: every non-empty layer,
@@ -530,6 +631,67 @@ mod tests {
             let s = shape(1, mv.rot);
             assert!(mv.j <= 62 && mv.j + s.w > 63);
         }
+    }
+
+    /// Every legal move by checking each position on its own (`is_valid_move`),
+    /// in `find_valid_moves` order.
+    fn brute_force_moves(b: &Board, value: u8) -> Vec<Move> {
+        if b.pieces().is_empty() {
+            return b.find_valid_moves(value);
+        }
+        let mut out = Vec::new();
+        for layer in 0..DEPTH {
+            for rot in 0..4 {
+                for i in 0..HEIGHT {
+                    for j in 0..WIDTH {
+                        let mv = Move::new(layer, i, j, rot);
+                        if b.is_valid_move(value, mv) {
+                            out.push(mv);
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Wide boards (beyond the 64-column fast path) and ordinary ones: the
+    /// row-at-a-time generator must agree with the per-position rule check.
+    #[test]
+    fn move_generation_matches_per_position_check() {
+        use crate::rng::Rng;
+        let mut rng = Rng::new(9);
+        let mut wide_positions = 0;
+        for game in 0..12 {
+            let mut b = Board::new();
+            for k in 0..20 {
+                let value = rng.below(10) as u8;
+                if let Some((_, _, lo, hi)) = b.layer_bbox(0) {
+                    // Wider than 52 columns, the scan no longer fits in a u64.
+                    wide_positions += usize::from(hi - lo + 1 > 52);
+                }
+                let moves = b.find_valid_moves(value);
+                assert_eq!(moves, brute_force_moves(&b, value), "game {game} ply {k}");
+                // Stretch the first 14 pieces sideways in half the games, then build up.
+                let mv = if game % 2 == 0 && k < 14 {
+                    let side = if k % 2 == 0 {
+                        moves.iter().min_by_key(|m| m.j)
+                    } else {
+                        moves.iter().max_by_key(|m| m.j)
+                    };
+                    *side.unwrap()
+                } else {
+                    let top = moves.iter().map(|m| m.layer).max().unwrap();
+                    let up: Vec<_> = moves.iter().filter(|m| m.layer == top).collect();
+                    **rng.choose(&up)
+                };
+                b.place(value, mv).unwrap();
+            }
+        }
+        assert!(
+            wide_positions >= 10,
+            "only {wide_positions} positions used the u128 path"
+        );
     }
 
     #[test]
