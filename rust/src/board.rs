@@ -416,7 +416,18 @@ impl Board {
             seam_v,
         } = maps;
         let cur_empty = self.layer_is_empty(layer);
+        // Pieces that look the same after a half turn (0 and 8) list each
+        // placement under rotations r and r + 2: scan rotations 0 and 1 and
+        // replay their rows for 2 and 3.
+        let half_turn = shape(value, 0).rows == shape(value, 2).rows;
+        let mut memo: [Vec<(usize, W)>; 2] = Default::default();
         for rot in 0..4 {
+            if half_turn && rot >= 2 {
+                for &(i, ok) in &memo[rot - 2] {
+                    sink.row(layer, i, rot, ok, base);
+                }
+                continue;
+            }
             let s = shape(value, rot);
             // Python searches `range(min - size, max + size)`; positions outside
             // the board are clipped (Python's behaviour there is undefined).
@@ -453,6 +464,9 @@ impl Board {
                 }
                 if ok != W::ZERO {
                     sink.row(layer, i, rot, ok, base);
+                    if half_turn {
+                        memo[rot].push((i, ok));
+                    }
                 }
             }
         }
