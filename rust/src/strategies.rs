@@ -214,11 +214,11 @@ pub fn lookahead_scores(board: &Board, value: u8, moves: &[Move]) -> Vec<f64> {
                 if counts[next as usize] == 0 {
                     continue;
                 }
-                let (mut n, mut layer_sum) = (0i64, 0i64);
-                tmp.for_each_valid_move(next, |m| {
-                    n += 1;
-                    layer_sum += m.layer as i64;
-                });
+                let per_layer = tmp.count_valid_moves(next);
+                let n: i64 = per_layer.iter().map(|&c| c as i64).sum();
+                let layer_sum: i64 = (0..per_layer.len())
+                    .map(|l| (l * per_layer[l]) as i64)
+                    .sum();
                 total_moves += counts[next as usize] * n;
                 weighted_layer_sum += counts[next as usize] * next as i64 * layer_sum;
             }
