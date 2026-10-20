@@ -175,6 +175,20 @@ mod tests {
         }
     }
 
+    /// Move generation replays rotations 0 and 1 for 2 and 3 when a piece
+    /// looks the same after a half turn; check exactly 0 and 8 do.
+    #[test]
+    fn half_turn_symmetric_pieces() {
+        let symmetric: Vec<u8> = (0..10u8)
+            .filter(|&v| shape(v, 0).rows == shape(v, 2).rows)
+            .collect();
+        assert_eq!(symmetric, vec![0, 8]);
+        for v in symmetric {
+            assert_eq!(shape(v, 1).grid(), shape(v, 3).grid());
+            assert_eq!(shape(v, 0).grid(), shape(v, 2).grid());
+        }
+    }
+
     #[test]
     fn ring_of_zero_includes_hole() {
         let s = shape(0, 0);
