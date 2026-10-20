@@ -202,10 +202,10 @@ pub fn lookahead_scores(board: &Board, value: u8, moves: &[Move]) -> Vec<f64> {
         counts[p.value as usize] -= 1;
     }
     let current_score = board.score();
+    let mut tmp = board.clone();
     moves
         .iter()
         .map(|&mv| {
-            let mut tmp = board.clone();
             tmp.place(value, mv).expect("legal move");
             let base_score = current_score + value as i64 * mv.layer as i64;
             let mut total_moves: i64 = 0;
@@ -222,6 +222,7 @@ pub fn lookahead_scores(board: &Board, value: u8, moves: &[Move]) -> Vec<f64> {
                 total_moves += counts[next as usize] * n;
                 weighted_layer_sum += counts[next as usize] * next as i64 * layer_sum;
             }
+            tmp.undo();
             if total_moves == 0 {
                 base_score as f64
             } else {
