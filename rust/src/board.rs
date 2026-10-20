@@ -79,6 +79,8 @@ pub struct Board {
     occ: [[u128; HEIGHT]; DEPTH],
     bbox: [Option<BBox>; DEPTH],
     pieces: Vec<Placed>,
+    /// For each placed piece, its layer's bounding box before it (for `undo`).
+    prev_bbox: Vec<Option<BBox>>,
     /// Occupied cells per layer.
     fill: [u32; DEPTH],
     score: i64,
@@ -96,6 +98,7 @@ impl Board {
             occ: [[0; HEIGHT]; DEPTH],
             bbox: [None; DEPTH],
             pieces: Vec::with_capacity(20),
+            prev_bbox: Vec::with_capacity(20),
             fill: [0; DEPTH],
             score: 0,
         }
@@ -441,6 +444,7 @@ impl Board {
             min_j,
             max_j,
         };
+        self.prev_bbox.push(self.bbox[mv.layer]);
         self.bbox[mv.layer] = Some(match self.bbox[mv.layer] {
             Some(b) => b.union(piece_bb),
             None => piece_bb,
@@ -449,6 +453,21 @@ impl Board {
         self.fill[mv.layer] += s.tiles;
         self.score += value as i64 * mv.layer as i64;
         Ok(())
+    }
+
+    /// Take back the most recently placed piece, restoring the board exactly.
+    /// Cheaper than cloning the board to try a move.
+    pub fn undo(&mut self) -> Option<Placed> {
+        let p = self.pieces.pop()?;
+        let mv = p.mv;
+        let s = shape(p.value, mv.rot);
+        for r in 0..s.h {
+            self.occ[mv.layer][mv.i + r] &= !Self::row_mask(s, r, mv.j);
+        }
+        self.bbox[mv.layer] = self.prev_bbox.pop().unwrap();
+        self.fill[mv.layer] -= s.tiles;
+        self.score -= p.value as i64 * mv.layer as i64;
+        Some(p)
     }
 
     /// The board as `Board.board` would hold it: `values[layer][i][j]`, flattened,
@@ -687,6 +706,35 @@ mod tests {
             wide_positions >= 10,
             "only {wide_positions} positions used the u128 path"
         );
+    }
+
+    #[test]
+    fn undo_restores_the_board() {
+        use crate::rng::Rng;
+        use crate::strategies::Strategy;
+        let mut rng = Rng::new(4);
+        let mut b = Board::new();
+        let mut history = vec![b.clone()];
+        for _ in 0..20 {
+            let value = rng.below(10) as u8;
+            let mv = Strategy::EdgesThenUp.choose(&b, value, &mut rng);
+            b.place(value, mv).unwrap();
+            history.push(b.clone());
+        }
+        while let Some(expected) = history.pop() {
+            assert_eq!(b.values(), expected.values());
+            assert_eq!(b.score(), expected.score());
+            assert_eq!(b.pieces(), expected.pieces());
+            for layer in 0..DEPTH {
+                assert_eq!(b.layer_bbox(layer), expected.layer_bbox(layer));
+                assert_eq!(b.layer_fill(layer), expected.layer_fill(layer));
+            }
+            for v in 0..10 {
+                assert_eq!(b.find_valid_moves(v), expected.find_valid_moves(v));
+            }
+            b.undo();
+        }
+        assert!(b.undo().is_none());
     }
 
     #[test]
