@@ -169,8 +169,16 @@ impl Board {
     pub fn num_edges_touching(&self, value: u8, mv: Move) -> u32 {
         let s = shape(value, mv.rot);
         let rows = &self.occ[mv.layer];
+        // Bring columns j - 1 .. j + 5 down to the low byte to match `s.ring`.
+        let window = |x: u128| {
+            if mv.j == 0 {
+                (x << 1) as u8
+            } else {
+                (x >> (mv.j - 1)) as u8
+            }
+        };
         Self::ring_rows(s, mv.i)
-            .map(|(row, rr)| (rows[row] & Self::ring_mask(s, rr, mv.j)).count_ones())
+            .map(|(row, rr)| (window(rows[row]) & s.ring[rr]).count_ones())
             .sum()
     }
 
@@ -182,7 +190,7 @@ impl Board {
         let s = shape(value, mv.rot);
         let below = &self.occ[mv.layer - 1];
         (0..s.h)
-            .map(|r| (below[mv.i + r] & Self::row_mask(s, r, mv.j)).count_ones())
+            .map(|r| ((below[mv.i + r] >> mv.j) as u8 & s.rows[r]).count_ones())
             .sum()
     }
 
