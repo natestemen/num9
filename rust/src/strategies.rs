@@ -1,9 +1,9 @@
-//! Ports of the strategies in `num9/strategies.py`.
+//! Ports of the strategies from the Python `num9/strategies.py`.
 //!
 //! Each strategy is split into a deterministic [`Strategy::decide`] step, which
 //! returns the legal moves plus the indices the Python version would hand to
-//! `random.choice`, and the random pick itself. That split is what lets the
-//! Python test-suite check the ports decision-by-decision.
+//! `random.choice`, and the random pick itself. That split is what lets
+//! `tests/golden.rs` check the ports decision-by-decision.
 
 use crate::board::{Board, Move};
 use crate::piece::shape;

@@ -29,8 +29,8 @@ fn check_value(value: u8) -> PyResult<u8> {
     Ok(value)
 }
 
-/// NMBR 9 board. Mirrors `num9.Board`, but takes piece values (ints) rather
-/// than `Piece` objects and explicit rotations.
+/// NMBR 9 board. Pieces are given by value (0-9) and placements as
+/// `(layer, i, j)` plus a rotation (clockwise quarter turns).
 #[pyclass(name = "Board", module = "num9_core")]
 #[derive(Clone)]
 struct PyBoard {
@@ -46,8 +46,8 @@ impl PyBoard {
         }
     }
 
-    /// All legal `(layer, i, j, rotation)` placements, in the same order as
-    /// `num9.Board.find_valid_moves`.
+    /// All legal `(layer, i, j, rotation)` placements, ordered by layer, then
+    /// rotation, then row, then column.
     fn find_valid_moves(&self, value: u8) -> PyResult<Vec<MoveTuple>> {
         let value = check_value(value)?;
         Ok(self
@@ -123,7 +123,7 @@ impl PyBoard {
     }
 
     /// Cell values as a flat list of length `DEPTH * HEIGHT * WIDTH` (reshape
-    /// to `(DEPTH, HEIGHT, WIDTH)` to compare with `num9.Board.board`).
+    /// to `(DEPTH, HEIGHT, WIDTH)`); piece 0 is stored as 10.
     fn values(&self) -> Vec<i32> {
         self.inner.values()
     }
@@ -140,6 +140,10 @@ impl PyBoard {
 
     fn __len__(&self) -> usize {
         self.inner.pieces().len()
+    }
+
+    fn __str__(&self) -> String {
+        self.inner.to_string()
     }
 
     fn __repr__(&self) -> String {

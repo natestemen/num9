@@ -1,4 +1,4 @@
-//! Board state and move generation, mirroring `num9/board.py`.
+//! Board state and move generation, ported from the Python `num9/board.py`.
 //!
 //! Each layer is stored as one `u128` bitmask per row (bit `j` = column `j`),
 //! so overlap, adjacency and support checks are a handful of word operations.
@@ -214,7 +214,7 @@ impl Board {
     }
 
     /// The legality test of `find_valid_moves`: `validate_touching` and
-    /// `validate_supported` from `num9/board.py`.
+    /// `validate_supported` from the Python `num9/board.py`.
     fn is_legal(&self, s: &Shape, layer: usize, i: usize, j: usize) -> bool {
         if !self.layer_is_empty(layer)
             && (self.overlaps(s, layer, i, j) || !self.touches(s, layer, i, j))
@@ -341,6 +341,46 @@ impl Board {
             }
         }
         out
+    }
+}
+
+/// Emoji rendering, as the Python `Board.__str__` printed it: every non-empty layer,
+/// cropped to the occupied area plus a one-cell border.
+impl fmt::Display for Board {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Some(bb) = self.bbox.iter().flatten().copied().reduce(BBox::union) else {
+            return Ok(());
+        };
+        let values = self.values();
+        let top = (0..DEPTH).rev().find(|&l| !self.layer_is_empty(l)).unwrap();
+        let width = bb.max_j - bb.min_j + 3;
+        let mut lines = Vec::new();
+        for layer in 0..=top {
+            lines.push(format!(
+                "{:-^w$}",
+                format!(" LAYER {layer} "),
+                w = 2 * width
+            ));
+            for i in bb.min_i - 1..=bb.max_i + 1 {
+                let row: String = (bb.min_j - 1..=bb.max_j + 1)
+                    .map(|j| match values[(layer * HEIGHT + i) * WIDTH + j] {
+                        0 => "⬜️",
+                        10 => "⬛️",
+                        1 => "🟫",
+                        2 => "🟧",
+                        3 => "🟨",
+                        4 => "🟩",
+                        5 => "🔵",
+                        6 => "🟦",
+                        7 => "🟪",
+                        8 => "💓",
+                        _ => "🟥",
+                    })
+                    .collect();
+                lines.push(row);
+            }
+        }
+        write!(f, "{}", lines.join("\n"))
     }
 }
 
