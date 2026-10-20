@@ -106,6 +106,14 @@ impl PyBoard {
             .num_edges_touching(value, Move::new(layer, i, j, rotation % 4)))
     }
 
+    /// Take back the last placed piece; returns it as
+    /// `(value, layer, i, j, rotation)`, or `None` on an empty board.
+    fn undo(&mut self) -> Option<(u8, usize, usize, usize, usize)> {
+        self.inner
+            .undo()
+            .map(|p| (p.value, p.mv.layer, p.mv.i, p.mv.j, p.mv.rot))
+    }
+
     fn score(&self) -> i64 {
         self.inner.score()
     }
