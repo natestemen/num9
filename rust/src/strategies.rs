@@ -8,6 +8,7 @@
 use crate::board::{Board, Move};
 use crate::piece::shape;
 use crate::rng::Rng;
+use crate::rollout::{self, MonteCarlo};
 
 /// Weights for [`Strategy::SolidBaseHighTop`]; defaults match the Python ones.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,6 +49,9 @@ pub enum Strategy {
     LowToBase {
         max_low: u8,
     },
+    /// Pick the candidate move with the best average final score over
+    /// simulated continuations (see [`crate::rollout`]).
+    MonteCarlo(MonteCarlo),
 }
 
 /// A strategy's deterministic output: pick uniformly among `moves[candidates[k]]`.
@@ -64,13 +68,14 @@ impl Decision {
 }
 
 impl Strategy {
-    pub const NAMES: [&'static str; 6] = [
+    pub const NAMES: [&'static str; 7] = [
         "place_randomly",
         "go_up_randomly",
         "edges_then_up",
         "solid_base_high_top",
         "maximize_lookahead",
         "low_to_base",
+        "monte_carlo",
     ];
 
     /// Look a strategy up by the name used in `benchmark_strategies.py`
@@ -85,6 +90,7 @@ impl Strategy {
             }
             "maximize_lookahead" => Strategy::MaximizeLookahead,
             "low_to_base" => Strategy::LowToBase { max_low: 3 },
+            "monte_carlo" => Strategy::MonteCarlo(MonteCarlo::default()),
             _ => return None,
         })
     }
@@ -96,6 +102,7 @@ impl Strategy {
             Strategy::GoUpRandomly => go_up_randomly(&moves),
             Strategy::EdgesThenUp => edges_then_up(board, value, &moves, 1),
             Strategy::LowToBase { max_low } => edges_then_up(board, value, &moves, *max_low),
+            Strategy::MonteCarlo(mc) => rollout::monte_carlo(board, value, &moves, mc),
             Strategy::SolidBaseHighTop(w) => solid_base_high_top(board, value, &moves, w),
             Strategy::MaximizeLookahead => maximize_lookahead(board, value, &moves),
         };

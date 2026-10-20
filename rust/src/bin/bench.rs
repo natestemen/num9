@@ -29,8 +29,8 @@ fn main() {
     println!("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
     for name in Strategy::NAMES {
         let strategy = Strategy::from_name(name).unwrap();
-        // The lookahead strategy is far more expensive; keep its run short.
-        let n = if name == "maximize_lookahead" {
+        // The search strategies are far more expensive; keep their runs short.
+        let n = if name == "maximize_lookahead" || name == "monte_carlo" {
             games.min(100)
         } else {
             games
