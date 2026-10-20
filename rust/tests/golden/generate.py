@@ -3,7 +3,7 @@
 The Python engine (`num9` package) was removed once the Rust port replaced
 it; these fixtures preserve its behaviour so `cargo test` can keep checking
 the port against it. To regenerate, check out the last commit that has the
-`num9/` package (45f7d47) with `num9_core` built, and run from the repo root:
+`num9/` package (0eae7d2) with `num9_core` built, and run from the repo root:
 
     python rust/tests/golden/generate.py
 
