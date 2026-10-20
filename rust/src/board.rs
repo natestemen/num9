@@ -79,6 +79,8 @@ pub struct Board {
     occ: [[u128; HEIGHT]; DEPTH],
     bbox: [Option<BBox>; DEPTH],
     pieces: Vec<Placed>,
+    /// Occupied cells per layer.
+    fill: [u32; DEPTH],
     score: i64,
 }
 
@@ -94,6 +96,7 @@ impl Board {
             occ: [[0; HEIGHT]; DEPTH],
             bbox: [None; DEPTH],
             pieces: Vec::with_capacity(20),
+            fill: [0; DEPTH],
             score: 0,
         }
     }
@@ -117,13 +120,7 @@ impl Board {
 
     /// Number of occupied cells on a layer.
     pub fn layer_fill(&self, layer: usize) -> u32 {
-        match self.bbox[layer] {
-            None => 0,
-            Some(b) => self.occ[layer][b.min_i..=b.max_i]
-                .iter()
-                .map(|r| r.count_ones())
-                .sum(),
-        }
+        self.fill[layer]
     }
 
     /// Inclusive `(min_i, max_i, min_j, max_j)` of a layer's occupied cells.
@@ -441,6 +438,7 @@ impl Board {
             None => piece_bb,
         });
         self.pieces.push(Placed { value, mv });
+        self.fill[mv.layer] += s.tiles;
         self.score += value as i64 * mv.layer as i64;
         Ok(())
     }
