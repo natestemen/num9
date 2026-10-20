@@ -275,9 +275,23 @@ impl Board {
     /// column `j`), built by shifting the board rows under each tile. This is
     /// equivalent to running `is_legal` at every position, which
     /// `is_valid_move` still does and the tests compare against.
-    pub fn for_each_valid_move(&self, value: u8, mut f: impl FnMut(Move)) {
+    pub fn for_each_valid_move(&self, value: u8, f: impl FnMut(Move)) {
+        self.scan(value, &mut EmitMoves(f));
+    }
+
+    /// Number of legal placements of piece `value` on each layer, i.e. how
+    /// `find_valid_moves` would split by layer, without listing the moves.
+    pub fn count_valid_moves(&self, value: u8) -> [usize; DEPTH] {
+        let mut counts = CountMoves([0; DEPTH]);
+        self.scan(value, &mut counts);
+        counts.0
+    }
+
+    /// Feed every row's legal columns, in `find_valid_moves` order, to `sink`.
+    fn scan(&self, value: u8, sink: &mut impl RowSink) {
         if self.pieces.is_empty() {
-            f(Self::center_move());
+            let mv = Self::center_move();
+            sink.row(mv.layer, mv.i, mv.rot, 1u128 << mv.j, 0);
             return;
         }
         let mut cur64 = [0u64; HEIGHT];
@@ -323,7 +337,7 @@ impl Board {
                     seam_h: &seam_h64,
                     seam_v: &seam_v64,
                 };
-                self.scan_layer(value, layer, bb, base, maps, &mut f);
+                self.scan_layer(value, layer, bb, base, maps, sink);
             } else {
                 let mut adj = [0u128; HEIGHT];
                 let mut seam_h = [0u128; HEIGHT];
@@ -344,7 +358,7 @@ impl Board {
                     seam_h: &seam_h,
                     seam_v: &seam_v,
                 };
-                self.scan_layer(value, layer, bb, 0, maps, &mut f);
+                self.scan_layer(value, layer, bb, 0, maps, sink);
             }
         }
     }
@@ -384,7 +398,7 @@ impl Board {
         }
     }
 
-    /// Emit the legal moves on one layer (see [`LayerMaps`]).
+    /// Feed the legal columns of each row of one layer to `sink` (see [`LayerMaps`]).
     fn scan_layer<W: Word>(
         &self,
         value: u8,
@@ -392,7 +406,7 @@ impl Board {
         bb: BBox,
         base: usize,
         maps: LayerMaps<'_, W>,
-        f: &mut impl FnMut(Move),
+        sink: &mut impl RowSink,
     ) {
         let LayerMaps {
             cur,
@@ -437,14 +451,8 @@ impl Board {
                     let (overlap, touch) = any_tile2(cur, adj, s, i);
                     ok &= !overlap & touch;
                 }
-                while ok != W::ZERO {
-                    f(Move::new(
-                        layer,
-                        i,
-                        ok.trailing_zeros() as usize + base,
-                        rot,
-                    ));
-                    ok = ok.clear_lowest();
+                if ok != W::ZERO {
+                    sink.row(layer, i, rot, ok, base);
                 }
             }
         }
@@ -537,6 +545,7 @@ trait Word:
     /// Keep the low bits that fit (truncating).
     fn from_u128(x: u128) -> Self;
     fn trailing_zeros(self) -> u32;
+    fn count_ones(self) -> u32;
     fn clear_lowest(self) -> Self;
 }
 
@@ -552,6 +561,10 @@ macro_rules! impl_word {
             #[inline]
             fn trailing_zeros(self) -> u32 {
                 <$t>::trailing_zeros(self)
+            }
+            #[inline]
+            fn count_ones(self) -> u32 {
+                <$t>::count_ones(self)
             }
             #[inline]
             fn clear_lowest(self) -> Self {
@@ -576,6 +589,40 @@ fn all_tiles<W: Word>(rows: &[W; HEIGHT], s: &Shape, i: usize) -> W {
         }
     }
     m
+}
+
+/// Receives move generation's results a row at a time: `cols` bit `k` means
+/// the piece fits at (`i`, `base + k`) on `layer` with rotation `rot`.
+trait RowSink {
+    fn row<W: Word>(&mut self, layer: usize, i: usize, rot: usize, cols: W, base: usize);
+}
+
+/// Hands each move to a callback.
+struct EmitMoves<F>(F);
+
+impl<F: FnMut(Move)> RowSink for EmitMoves<F> {
+    #[inline]
+    fn row<W: Word>(&mut self, layer: usize, i: usize, rot: usize, mut cols: W, base: usize) {
+        while cols != W::ZERO {
+            (self.0)(Move::new(
+                layer,
+                i,
+                cols.trailing_zeros() as usize + base,
+                rot,
+            ));
+            cols = cols.clear_lowest();
+        }
+    }
+}
+
+/// Counts moves per layer.
+struct CountMoves([usize; DEPTH]);
+
+impl RowSink for CountMoves {
+    #[inline]
+    fn row<W: Word>(&mut self, layer: usize, _i: usize, _rot: usize, cols: W, _base: usize) {
+        self.0[layer] += cols.count_ones() as usize;
+    }
 }
 
 /// Row bitmaps for scanning one layer, all shifted right by the same base column.
@@ -774,6 +821,28 @@ mod tests {
             wide_positions >= 10,
             "only {wide_positions} positions used the u128 path"
         );
+    }
+
+    #[test]
+    fn counts_match_listed_moves() {
+        use crate::rng::Rng;
+        use crate::strategies::Strategy;
+        let mut rng = Rng::new(6);
+        for _ in 0..10 {
+            let mut b = Board::new();
+            for _ in 0..20 {
+                for v in 0..10 {
+                    let mut expected = [0; DEPTH];
+                    for m in b.find_valid_moves(v) {
+                        expected[m.layer] += 1;
+                    }
+                    assert_eq!(b.count_valid_moves(v), expected);
+                }
+                let value = rng.below(10) as u8;
+                let mv = Strategy::SolidBaseHighTop(Default::default()).choose(&b, value, &mut rng);
+                b.place(value, mv).unwrap();
+            }
+        }
     }
 
     #[test]
