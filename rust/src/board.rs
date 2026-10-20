@@ -273,6 +273,7 @@ impl Board {
         }
         let mut single = Vec::new();
         let mut cur64 = [0u64; HEIGHT];
+        let mut adj64 = [0u64; HEIGHT];
         let mut below64 = [0u64; HEIGHT];
         for layer in 0..DEPTH {
             if layer > 0 && self.layer_is_empty(layer - 1) {
@@ -287,41 +288,40 @@ impl Board {
             // When those columns fit in 64 bits (always, in practice), scan a
             // 64-bit copy of them: u64 shifts are much cheaper than u128 ones.
             let base = bb.min_j.saturating_sub(5);
+            let rows = bb.min_i.saturating_sub(5)..(bb.max_i + 9).min(HEIGHT);
+            let occ = &self.occ[layer];
             if bb.max_j + 8 <= base + 64 {
-                for r in bb.min_i.saturating_sub(5)..(bb.max_i + 9).min(HEIGHT) {
-                    cur64[r] = (self.occ[layer][r] >> base) as u64;
+                for r in rows {
+                    cur64[r] = (occ[r] >> base) as u64;
+                    adj64[r] = (Self::adjacent(occ, r) >> base) as u64;
                     if layer > 0 {
                         below64[r] = (self.occ[layer - 1][r] >> base) as u64;
                     }
                 }
-                self.scan_layer(
-                    value,
-                    layer,
-                    bb,
-                    base,
-                    &cur64,
-                    &below64,
-                    &mut single,
-                    &mut f,
-                );
+                let maps = (&cur64, &adj64, &below64);
+                self.scan_layer(value, layer, bb, base, maps, &mut single, &mut f);
             } else {
-                let below = &self.occ[layer.saturating_sub(1)];
-                self.scan_layer(
-                    value,
-                    layer,
-                    bb,
-                    0,
-                    &self.occ[layer],
-                    below,
-                    &mut single,
-                    &mut f,
-                );
+                let mut adj = [0u128; HEIGHT];
+                for r in rows {
+                    adj[r] = Self::adjacent(occ, r);
+                }
+                let maps = (occ, &adj, &self.occ[layer.saturating_sub(1)]);
+                self.scan_layer(value, layer, bb, 0, maps, &mut single, &mut f);
             }
         }
     }
 
-    /// Emit the legal moves on one layer. `cur` and `below` hold this layer's
-    /// and the layer below's rows, shifted right by `base` columns.
+    /// Row `r` of the cells orthogonally adjacent to an occupied cell of `occ`.
+    #[inline]
+    fn adjacent(occ: &[u128; HEIGHT], r: usize) -> u128 {
+        let up = if r > 0 { occ[r - 1] } else { 0 };
+        let down = if r + 1 < HEIGHT { occ[r + 1] } else { 0 };
+        (up | down | (occ[r] << 1) | (occ[r] >> 1)) & COL_MASK
+    }
+
+    /// Emit the legal moves on one layer. `maps` holds this layer's occupied
+    /// cells, the cells adjacent to them, and the layer below's occupied cells,
+    /// all shifted right by `base` columns.
     #[allow(clippy::too_many_arguments)]
     fn scan_layer<W: Word>(
         &self,
@@ -329,11 +329,11 @@ impl Board {
         layer: usize,
         bb: BBox,
         base: usize,
-        cur: &[W; HEIGHT],
-        below: &[W; HEIGHT],
+        maps: (&[W; HEIGHT], &[W; HEIGHT], &[W; HEIGHT]),
         single: &mut Vec<(usize, u128)>,
         f: &mut impl FnMut(Move),
     ) {
+        let (cur, adj, below) = maps;
         let cur_empty = self.layer_is_empty(layer);
         for rot in 0..4 {
             let s = shape(value, rot);
@@ -363,7 +363,10 @@ impl Board {
                     }
                 }
                 if ok != W::ZERO && !cur_empty {
-                    ok &= !any_tile(cur, s, i) & any_ring(cur, s, i);
+                    // With no tile on an occupied cell, the piece touches one
+                    // exactly when some tile is adjacent to an occupied cell.
+                    let (overlap, touch) = any_tile2(cur, adj, s, i);
+                    ok &= !overlap & touch;
                 }
                 while ok != W::ZERO {
                     f(Move::new(
@@ -515,36 +518,22 @@ fn all_tiles<W: Word>(rows: &[W; HEIGHT], s: &Shape, i: usize) -> W {
     m
 }
 
-/// Bit `j`: some tile of `s` at (`i`, `j`) lies on a set cell of `rows`.
+/// Bit `j` of each: some tile of `s` at (`i`, `j`) lies on a set cell of `a`
+/// (resp. `b`).
 #[inline]
-fn any_tile<W: Word>(rows: &[W; HEIGHT], s: &Shape, i: usize) -> W {
-    let mut m = W::ZERO;
+fn any_tile2<W: Word>(a: &[W; HEIGHT], b: &[W; HEIGHT], s: &Shape, i: usize) -> (W, W) {
+    let (mut ma, mut mb) = (W::ZERO, W::ZERO);
     for r in 0..s.h {
-        let x = rows[i + r];
+        let (x, y) = (a[i + r], b[i + r]);
         let mut bits = s.rows[r];
         while bits != 0 {
-            m |= x >> bits.trailing_zeros();
-            bits &= bits - 1;
-        }
-    }
-    m
-}
-
-/// Bit `j`: some neighbour of `s` at (`i`, `j`) lies on a set cell of `rows`.
-#[inline]
-fn any_ring<W: Word>(rows: &[W; HEIGHT], s: &Shape, i: usize) -> W {
-    let mut m = W::ZERO;
-    for (row, rr) in Board::ring_rows(s, i) {
-        let x = rows[row];
-        let mut bits = s.ring[rr];
-        while bits != 0 {
-            // Ring bit `c` is column offset `c - 1` from the piece.
             let c = bits.trailing_zeros();
-            m |= if c == 0 { x << 1 } else { x >> (c - 1) };
+            ma |= x >> c;
+            mb |= y >> c;
             bits &= bits - 1;
         }
     }
-    m
+    (ma, mb)
 }
 
 /// Emoji rendering, as the Python `Board.__str__` printed it: every non-empty layer,
