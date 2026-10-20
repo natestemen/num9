@@ -24,6 +24,7 @@ moves = board.find_valid_moves(7)              # [(layer, i, j, rotation), ...]
 board.place(7, moves[0][:3], moves[0][3])
 print(board)                                   # emoji rendering of each layer
 board.score()
+board.undo()                                   # take back the last piece (cheaper than copy())
 
 num9_core.STRATEGIES                           # names of the built-in strategies
 num9_core.choose_move("solid_base_high_top", board, 3, seed=1)

@@ -43,6 +43,17 @@ def test_copy_is_independent():
     assert len(clone) == len(board) + 1
 
 
+def test_undo_restores_previous_state():
+    board = num9_core.play_game("edges_then_up", seed=8)
+    before = board.copy()
+    move = board.find_valid_moves(6)[0]
+    board.place(6, move[:3], move[3])
+    assert board.undo() == (6, *move)
+    assert board.values() == before.values() and board.score() == before.score()
+    assert board.find_valid_moves(6) == before.find_valid_moves(6)
+    assert num9_core.Board().undo() is None
+
+
 def test_play_game_is_reproducible():
     a = num9_core.play_game("solid_base_high_top", seed=11)
     b = num9_core.play_game("solid_base_high_top", seed=11)
