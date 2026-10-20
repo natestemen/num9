@@ -1,42 +1,20 @@
 # [NMBR 9](https://boardgamegeek.com/boardgame/217449/nmbr-9)
 
-but in python
+but in rust, driven from python
 
+The engine (board, move generation, scoring) and all strategies live in
+`rust/` and are exposed to Python as `num9_core`. They started as a Python
+package; the Rust port reproduces it exactly and is roughly 2,000–3,000×
+faster (see [history](#history)).
 
-## stats
-
-statistics here are small.
-usually generated from a sequence of 100 random games.
-
-| method     | average score | average duration (s) |
-| ---------- | ------------- | -------------------- |
-| random     | 1             | 2.39                 |
-| up         | 14            | 1.49                 |
-| edges + up | 55            | 1.17                 |
-
-<!-- benchmarks:start -->
-| strategy | games | avg | median | min | max | time (s) | games/s |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| place_randomly | 100 | 1.05 | 0.00 | 0 | 9 | 272.12 | 0.37 |
-| go_up_randomly | 100 | 15.49 | 12.00 | 2 | 44 | 174.16 | 0.57 |
-| edges_then_up | 100 | 58.13 | 57.00 | 36 | 97 | 152.75 | 0.65 |
-| solid_base_high_top | 100 | 50.37 | 50.00 | 26 | 81 | 210.58 | 0.47 |
-<!-- benchmarks:end -->
-
-## rust engine
-
-`rust/` is a Rust port of the engine (`Board`, move generation, scoring) and
-all strategies in `num9/strategies.py`, exposed to Python as `num9_core`.
-It produces exactly the same moves, in the same order, as
-`num9.Board.find_valid_moves`, and makes the same decisions as each Python
-strategy. It is roughly 2,000–3,000× faster.
+## setup
 
 ```sh
-pip install maturin pytest pytest-xdist
+pip install maturin pytest numpy tqdm
 maturin develop --release -m rust/Cargo.toml   # builds and installs num9_core
-
-python -c "import num9_core; print(num9_core.play_games('edges_then_up', 1000, seed=0)[:10])"
 ```
+
+## usage
 
 ```python
 import num9_core
@@ -44,45 +22,45 @@ import num9_core
 board = num9_core.Board()
 moves = board.find_valid_moves(7)              # [(layer, i, j, rotation), ...]
 board.place(7, moves[0][:3], moves[0][3])
+print(board)                                   # emoji rendering of each layer
+board.score()
+
+num9_core.STRATEGIES                           # names of the built-in strategies
 num9_core.choose_move("solid_base_high_top", board, 3, seed=1)
-num9_core.decide("edges_then_up", board, 3)    # (moves, indices random.choice picks from)
-num9_core.play_games("solid_base_high_top", 10_000, seed=0, threads=8)
+num9_core.decide("edges_then_up", board, 3)    # (moves, indices of tied best moves)
+num9_core.play_game("edges_then_up", seed=0)   # -> finished Board
+num9_core.play_games("solid_base_high_top", 10_000, seed=0, threads=8)  # -> scores
+num9_core.play_games("solid_base_high_top", 100, weights={"height_weight": 12.0})
 ```
 
-### testing
+Scripts:
+
+- `test.py`: play and print one game
+- `many.py`: play 100 games, print the good ones
+- `benchmark_strategies.py`: benchmark every strategy (`--update-readme` refreshes the table below)
+- `optimize_params.py`: random-search the `solid_base_high_top` weights
+- `cargo run --release --manifest-path rust/Cargo.toml --bin bench`: the same benchmark without Python
+
+## testing
 
 ```sh
-cargo test --release --manifest-path rust/Cargo.toml   # Rust unit tests
-pytest tests -n 8                                      # Rust vs Python equivalence
-NUM9_EQUIV_GAMES=50 pytest tests -n 8                  # longer sweep (~50 min)
+cargo test --release --manifest-path rust/Cargo.toml   # engine + golden tests
+pytest tests                                           # Python bindings
 ```
 
-`tests/test_rust_equivalence.py` replays games on both engines and checks,
-at every position:
+`rust/tests/golden/` holds fixtures recorded from the original Python
+engine: for 27 games (including rare ones reaching layer 4), the legal moves
+of all ten pieces at every position, the edge counts of every legal move, and
+the board after every placement; and for 55 strategy games, every decision's
+legal moves, tie set and pick. `rust/tests/golden.rs` replays them, so the
+engine still matches the Python behaviour it replaced (`generate.py` there
+documents how they were made).
 
-- `find_valid_moves` for all ten piece values: same moves, same order
-- `num_edges_touching` for every legal move, and `is_valid_move` against
-  every placement near the pieces (legal and illegal)
-- identical board arrays and scores after every placement
-- for each strategy, the same set of tied moves handed to `random.choice`
-  (patched to make a known pick so both engines follow the same game)
+## stats
 
-It also replays rare games that reach layer 4.
+`python benchmark_strategies.py --games 1000 --seed 1 --update-readme` (one thread):
 
-### benchmarks
-
-`python benchmark_engines.py --py-games 20 --rs-games 1000` (8-core machine):
-
-| | Python | Rust (via Python) | speedup |
-| --- | --- | --- | --- |
-| `find_valid_moves` | 103 ms / call | 44 µs / call | ~2,400× |
-| edges_then_up game | 0.48 games/s | 1,167 games/s (4,192 on 8 threads) | ~2,400× |
-| solid_base_high_top game | 0.40 games/s | 1,151 games/s (4,039 on 8 threads) | ~2,900× |
-| maximize_lookahead game | ~47 min / game (est.) | 1.2 games/s | ~3,300× |
-
-`python benchmark_strategies.py --engine rust --games 1000 --seed 1`:
-
-<!-- benchmarks-rust:start -->
+<!-- benchmarks:start -->
 | strategy | games | avg | median | min | max | time (s) | games/s |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | place_randomly | 1000 | 1.10 | 0.00 | 0 | 15 | 0.90 | 1105.44 |
@@ -90,4 +68,25 @@ It also replays rare games that reach layer 4.
 | edges_then_up | 1000 | 56.78 | 55.00 | 23 | 97 | 0.71 | 1409.81 |
 | solid_base_high_top | 1000 | 48.93 | 47.00 | 14 | 107 | 0.84 | 1191.23 |
 | maximize_lookahead | 1000 | 60.21 | 59.00 | 30 | 113 | 825.66 | 1.21 |
-<!-- benchmarks-rust:end -->
+<!-- benchmarks:end -->
+
+## history
+
+The engine was first written in Python (`num9/`, removed after the port;
+see the git history). Its last benchmark, 100 games per strategy:
+
+| strategy | games | avg | median | min | max | time (s) | games/s |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| place_randomly | 100 | 1.05 | 0.00 | 0 | 9 | 272.12 | 0.37 |
+| go_up_randomly | 100 | 15.49 | 12.00 | 2 | 44 | 174.16 | 0.57 |
+| edges_then_up | 100 | 58.13 | 57.00 | 36 | 97 | 152.75 | 0.65 |
+| solid_base_high_top | 100 | 50.37 | 50.00 | 26 | 81 | 210.58 | 0.47 |
+
+Head-to-head on the same 8-core machine, before the Python engine was removed:
+
+| | Python | Rust (via Python) | speedup |
+| --- | --- | --- | --- |
+| `find_valid_moves` | 103 ms / call | 44 µs / call | ~2,400× |
+| edges_then_up game | 0.48 games/s | 1,167 games/s (4,192 on 8 threads) | ~2,400× |
+| solid_base_high_top game | 0.40 games/s | 1,151 games/s (4,039 on 8 threads) | ~2,900× |
+| maximize_lookahead game | ~47 min / game (est.) | 1.2 games/s | ~3,300× |

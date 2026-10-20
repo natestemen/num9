@@ -9,8 +9,7 @@ import argparse
 import statistics
 from random import Random
 
-from num9 import Board, Piece
-from num9.strategies import choose_solid_base_high_top
+import num9_core
 
 WEIGHT_RANGES = {
     "fill_weight": (0.2, 1.2),
@@ -40,18 +39,10 @@ def sample_weights_near(
     return weights
 
 
-def play_game(weights: dict[str, float], rng: Random) -> int:
-    tiles = list(range(10)) * 2
-    rng.shuffle(tiles)
-    board = Board()
-    for num in tiles:
-        piece = Piece(num)
-        choose_solid_base_high_top(board, piece, **weights)
-    return board.score()
-
-
 def evaluate_weights(weights: dict[str, float], games: int, rng: Random) -> float:
-    scores = [play_game(weights, rng) for _ in range(games)]
+    scores = num9_core.play_games(
+        "solid_base_high_top", games, seed=rng.getrandbits(64), weights=weights
+    )
     return statistics.mean(scores)
 
 

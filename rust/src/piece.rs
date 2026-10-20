@@ -1,8 +1,8 @@
-//! Piece shapes, mirroring `num9/piece.py`.
+//! Piece shapes, ported from the Python `num9/piece.py`.
 
 use std::sync::OnceLock;
 
-/// Piece layouts at rotation 0, copied from `num9/piece.py` (1 = tile).
+/// Piece layouts at rotation 0, copied from the Python `num9/piece.py` (1 = tile).
 const BASE: [&[&[u8]]; 10] = [
     &[&[1, 1, 1], &[1, 0, 1], &[1, 0, 1], &[1, 1, 1]],
     &[&[1, 1], &[0, 1], &[0, 1], &[0, 1]],

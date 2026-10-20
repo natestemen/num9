@@ -1,20 +1,14 @@
-from random import shuffle
+import random
 
 from numpy import average
 from tqdm import tqdm
 
-from num9 import Board, Piece
-from num9.strategies import choose_move_with_most_edges_touching
+import num9_core
 
 scores = []
 
-tiles = list(range(10)) * 2
 for _ in tqdm(range(100)):
-    b = Board()
-    shuffle(tiles)
-    for num in tiles:
-        piece = Piece(num)
-        choose_move_with_most_edges_touching(b, piece)
+    b = num9_core.play_game("edges_then_up", seed=random.getrandbits(64))
 
     score = b.score()
     scores.append(b.score())

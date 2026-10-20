@@ -3,62 +3,18 @@ Benchmark all strategies over many random games.
 
 Usage:
     python benchmark_strategies.py --games 1000 --seed 1
-    python benchmark_strategies.py --games 1000 --seed 1 --engine rust
+    python benchmark_strategies.py --games 1000 --threads 8 --strategies edges_then_up
 """
 
 import argparse
+import random
 import time
 from statistics import mean, median
-from typing import Callable
 
-from num9 import Board, Piece
-from num9.strategies import (
-    choose_move_with_most_edges_touching,
-    choose_solid_base_high_top,
-    go_up_randomly,
-    maximize_lookahead,
-    place_randomly,
-)
-from tqdm import trange
+import num9_core
 
 
-def play_game(strategy: Callable[[Board, Piece], None]) -> int:
-    tiles = list(range(10)) * 2
-    import random
-
-    random.shuffle(tiles)
-    board = Board()
-    for num in tiles:
-        piece = Piece(num)
-        strategy(board, piece)
-    return board.score()
-
-
-def run_strategy(
-    name: str, strategy: Callable[[Board, Piece], None], games: int
-) -> dict[str, float]:
-    scores: list[int] = []
-    start = time.perf_counter()
-    for _ in trange(games, desc=name):
-        scores.append(play_game(strategy))
-    elapsed = time.perf_counter() - start
-    return {
-        "name": name,
-        "games": games,
-        "avg": mean(scores),
-        "median": median(scores),
-        "min": min(scores),
-        "max": max(scores),
-        "elapsed_s": elapsed,
-        "games_per_sec": games / elapsed if elapsed > 0 else float("inf"),
-    }
-
-
-def run_rust_strategy(
-    name: str, games: int, seed: int, threads: int
-) -> dict[str, float]:
-    import num9_core
-
+def run_strategy(name: str, games: int, seed: int, threads: int) -> dict[str, float]:
     start = time.perf_counter()
     scores = num9_core.play_games(name, games, seed=seed, threads=threads)
     elapsed = time.perf_counter() - start
@@ -102,9 +58,9 @@ def render_markdown_table(results: list[dict[str, float]]) -> str:
     return "\n".join(lines)
 
 
-def update_readme(readme_path: str, table: str, section: str = "benchmarks") -> None:
-    marker_start = f"<!-- {section}:start -->"
-    marker_end = f"<!-- {section}:end -->"
+def update_readme(readme_path: str, table: str) -> None:
+    marker_start = "<!-- benchmarks:start -->"
+    marker_end = "<!-- benchmarks:end -->"
     try:
         with open(readme_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -144,42 +100,26 @@ def main() -> None:
         help="Path to README to update when --update-readme is set.",
     )
     parser.add_argument(
-        "--engine",
-        choices=["python", "rust"],
-        default="python",
-        help="Python engine (num9) or Rust engine (num9_core, built with maturin).",
-    )
-    parser.add_argument(
         "--threads",
         type=int,
         default=1,
-        help="Worker threads for the Rust engine.",
+        help="Worker threads (games/s scales with this).",
+    )
+    parser.add_argument(
+        "--strategies",
+        nargs="+",
+        choices=num9_core.STRATEGIES,
+        default=num9_core.STRATEGIES,
+        help="Strategies to run (default: all).",
     )
     args = parser.parse_args()
 
-    if args.seed is not None:
-        import random
-
-        random.seed(args.seed)
-
-    strategies: list[tuple[str, Callable[[Board, Piece], None]]] = [
-        ("place_randomly", place_randomly),
-        ("go_up_randomly", go_up_randomly),
-        ("edges_then_up", choose_move_with_most_edges_touching),
-        ("solid_base_high_top", choose_solid_base_high_top),
-        # ("maximize_lookahead", maximize_lookahead),
-    ]
+    seed = args.seed if args.seed is not None else random.getrandbits(64)
 
     results = []
-    if args.engine == "rust":
-        strategies.append(("maximize_lookahead", maximize_lookahead))
-    for name, strat in strategies:
+    for name in args.strategies:
         print(f"Running {name} for {args.games} games...")
-        if args.engine == "rust":
-            seed = args.seed if args.seed is not None else 0
-            res = run_rust_strategy(name, args.games, seed, args.threads)
-        else:
-            res = run_strategy(name, strat, args.games)
+        res = run_strategy(name, args.games, seed, args.threads)
         results.append(res)
         print(
             f"{name}: avg={res['avg']:.2f}, median={res['median']:.2f}, "
@@ -197,8 +137,7 @@ def main() -> None:
 
     if args.update_readme:
         table = render_markdown_table(results)
-        section = "benchmarks-rust" if args.engine == "rust" else "benchmarks"
-        update_readme(args.readme_path, table, section)
+        update_readme(args.readme_path, table)
         print(f"\nREADME updated at {args.readme_path} (benchmarks section).")
 
 
