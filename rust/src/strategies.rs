@@ -42,6 +42,12 @@ pub enum Strategy {
     EdgesThenUp,
     SolidBaseHighTop(SolidWeights),
     MaximizeLookahead,
+    /// `EdgesThenUp` with a tunable cut-off: pieces worth at most `max_low`
+    /// go on the base layer, the rest as high as possible; ties broken by
+    /// most edges touching. `EdgesThenUp` is `LowToBase { max_low: 1 }`.
+    LowToBase {
+        max_low: u8,
+    },
 }
 
 /// A strategy's deterministic output: pick uniformly among `moves[candidates[k]]`.
@@ -58,12 +64,13 @@ impl Decision {
 }
 
 impl Strategy {
-    pub const NAMES: [&'static str; 5] = [
+    pub const NAMES: [&'static str; 6] = [
         "place_randomly",
         "go_up_randomly",
         "edges_then_up",
         "solid_base_high_top",
         "maximize_lookahead",
+        "low_to_base",
     ];
 
     /// Look a strategy up by the name used in `benchmark_strategies.py`
@@ -77,6 +84,7 @@ impl Strategy {
                 Strategy::SolidBaseHighTop(SolidWeights::default())
             }
             "maximize_lookahead" => Strategy::MaximizeLookahead,
+            "low_to_base" => Strategy::LowToBase { max_low: 3 },
             _ => return None,
         })
     }
@@ -86,7 +94,8 @@ impl Strategy {
         let candidates = match self {
             Strategy::PlaceRandomly => (0..moves.len()).collect(),
             Strategy::GoUpRandomly => go_up_randomly(&moves),
-            Strategy::EdgesThenUp => edges_then_up(board, value, &moves),
+            Strategy::EdgesThenUp => edges_then_up(board, value, &moves, 1),
+            Strategy::LowToBase { max_low } => edges_then_up(board, value, &moves, *max_low),
             Strategy::SolidBaseHighTop(w) => solid_base_high_top(board, value, &moves, w),
             Strategy::MaximizeLookahead => maximize_lookahead(board, value, &moves),
         };
@@ -113,8 +122,8 @@ fn go_up_randomly(moves: &[Move]) -> Vec<usize> {
     indices_on_layer(moves, max_layer(moves))
 }
 
-fn edges_then_up(board: &Board, value: u8, moves: &[Move]) -> Vec<usize> {
-    let options = if value <= 1 {
+fn edges_then_up(board: &Board, value: u8, moves: &[Move], max_low: u8) -> Vec<usize> {
+    let options = if value <= max_low {
         indices_on_layer(moves, 0)
     } else {
         // When every move is on one layer this keeps them all, as in Python.
@@ -242,4 +251,25 @@ fn maximize_lookahead(board: &Board, value: u8, moves: &[Move]) -> Vec<usize> {
         }
     }
     vec![best]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::shuffled_tiles;
+
+    #[test]
+    fn low_to_base_one_is_edges_then_up() {
+        let mut rng = Rng::new(2);
+        for _ in 0..20 {
+            let mut board = Board::new();
+            for value in shuffled_tiles(&mut rng) {
+                let d = Strategy::EdgesThenUp.decide(&board, value);
+                assert_eq!(d, Strategy::LowToBase { max_low: 1 }.decide(&board, value));
+                board
+                    .place(value, d.moves[*rng.choose(&d.candidates)])
+                    .unwrap();
+            }
+        }
+    }
 }
