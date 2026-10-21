@@ -30,8 +30,8 @@ impl Default for MonteCarlo {
             per_layer: 4,
             rollouts: 64,
             policy: Box::new(Strategy::LowToBase {
-                max_low: 3,
-                endgame: 0,
+                max_low: 4,
+                endgame: 4,
             }),
             seed: 0,
         }

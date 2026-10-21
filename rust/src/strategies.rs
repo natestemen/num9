@@ -94,8 +94,8 @@ impl Strategy {
             }
             "maximize_lookahead" => Strategy::MaximizeLookahead,
             "low_to_base" => Strategy::LowToBase {
-                max_low: 3,
-                endgame: 0,
+                max_low: 4,
+                endgame: 4,
             },
             "monte_carlo" => Strategy::MonteCarlo(MonteCarlo::default()),
             _ => return None,
