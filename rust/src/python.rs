@@ -5,11 +5,14 @@ use std::collections::HashMap;
 use pyo3::create_exception;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 
 use crate::board::{Board, Move, DEPTH, HEIGHT, WIDTH};
+use crate::encode;
 use crate::game;
 use crate::piece::shape;
 use crate::rng::Rng;
+use crate::rollout::candidate_moves;
 use crate::strategies::Strategy;
 
 create_exception!(num9_core, InvalidPlacementError, PyValueError);
@@ -288,6 +291,43 @@ fn piece_array(value: u8, rotation: usize) -> PyResult<Vec<Vec<i32>>> {
         .collect())
 }
 
+/// The distinct legal placements of `value` and the board after each, for
+/// machine learning: `(moves, data)` where `data` is bytes of 0/1 shaped
+/// `(len(moves), PLANES, CROP, CROP)` (see `numpy.frombuffer`). Each level
+/// has an "occupied" plane and a "borders another piece" plane, in a
+/// window around the pieces shared by all the moves. With `per_layer`, only
+/// the moves `monte_carlo` would consider (that many per level).
+#[pyfunction]
+#[pyo3(signature = (board, value, per_layer=None))]
+fn encode_afterstates<'py>(
+    py: Python<'py>,
+    board: &PyBoard,
+    value: u8,
+    per_layer: Option<usize>,
+) -> PyResult<(Vec<MoveTuple>, Bound<'py, PyBytes>)> {
+    let value = check_value(value)?;
+    let b = board.inner.clone();
+    let (moves, data) = py.detach(move || {
+        let moves = match per_layer {
+            None => encode::distinct_moves(&b, value),
+            Some(k) => {
+                let all = b.find_valid_moves(value);
+                candidate_moves(&b, value, &all, k)
+                    .into_iter()
+                    .map(|i| all[i])
+                    .collect()
+            }
+        };
+        let mut data = Vec::new();
+        encode::encode_afterstates(&b, value, &moves, &mut data);
+        (moves, data)
+    });
+    Ok((
+        moves.into_iter().map(to_tuple).collect(),
+        PyBytes::new(py, &data),
+    ))
+}
+
 #[pymodule]
 fn num9_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBoard>()?;
@@ -300,6 +340,9 @@ fn num9_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(play_game, m)?)?;
     m.add_function(wrap_pyfunction!(play_games, m)?)?;
     m.add_function(wrap_pyfunction!(piece_array, m)?)?;
+    m.add_function(wrap_pyfunction!(encode_afterstates, m)?)?;
+    m.add("CROP", encode::CROP)?;
+    m.add("PLANES", encode::PLANES)?;
     m.add("STRATEGIES", Strategy::NAMES.to_vec())?;
     m.add("DEPTH", DEPTH)?;
     m.add("HEIGHT", HEIGHT)?;
