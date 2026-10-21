@@ -1,0 +1,4 @@
+# CPU-only PyTorch is enough:
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch
+torch
+numpy
