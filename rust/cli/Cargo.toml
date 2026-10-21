@@ -1,0 +1,12 @@
+[package]
+name = "num9-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Play NMBR 9 in the terminal, with hints from the num9 engine"
+
+[[bin]]
+name = "num9"
+path = "src/main.rs"
+
+[dependencies]
+num9-core = { path = ".." }

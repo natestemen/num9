@@ -19,6 +19,9 @@ python = ["dep:pyo3"]
 [dependencies]
 pyo3 = { version = "0.30", features = ["extension-module"], optional = true }
 
+[workspace]
+members = [".", "cli"]
+
 [profile.release]
 lto = true
 codegen-units = 1
