@@ -6,6 +6,7 @@
 //! `tests/golden.rs` check the ports decision-by-decision.
 
 use crate::board::{Board, Move};
+use crate::game::TILES;
 use crate::piece::shape;
 use crate::rng::Rng;
 use crate::rollout::{self, MonteCarlo};
@@ -45,9 +46,12 @@ pub enum Strategy {
     MaximizeLookahead,
     /// `EdgesThenUp` with a tunable cut-off: pieces worth at most `max_low`
     /// go on the base layer, the rest as high as possible; ties broken by
-    /// most edges touching. `EdgesThenUp` is `LowToBase { max_low: 1 }`.
+    /// most edges touching. In the last `endgame` tiles of the game every
+    /// piece goes as high as possible (nothing is left to build on).
+    /// `EdgesThenUp` is `LowToBase { max_low: 1, endgame: 0 }`.
     LowToBase {
         max_low: u8,
+        endgame: u8,
     },
     /// Pick the candidate move with the best average final score over
     /// simulated continuations (see [`crate::rollout`]).
@@ -89,7 +93,10 @@ impl Strategy {
                 Strategy::SolidBaseHighTop(SolidWeights::default())
             }
             "maximize_lookahead" => Strategy::MaximizeLookahead,
-            "low_to_base" => Strategy::LowToBase { max_low: 3 },
+            "low_to_base" => Strategy::LowToBase {
+                max_low: 3,
+                endgame: 0,
+            },
             "monte_carlo" => Strategy::MonteCarlo(MonteCarlo::default()),
             _ => return None,
         })
@@ -100,8 +107,12 @@ impl Strategy {
         let candidates = match self {
             Strategy::PlaceRandomly => (0..moves.len()).collect(),
             Strategy::GoUpRandomly => go_up_randomly(&moves),
-            Strategy::EdgesThenUp => edges_then_up(board, value, &moves, 1),
-            Strategy::LowToBase { max_low } => edges_then_up(board, value, &moves, *max_low),
+            Strategy::EdgesThenUp => edges_then_up(board, value, &moves, Some(1)),
+            Strategy::LowToBase { max_low, endgame } => {
+                let tiles_left = TILES.saturating_sub(board.pieces().len());
+                let max_low = (tiles_left > *endgame as usize).then_some(*max_low);
+                edges_then_up(board, value, &moves, max_low)
+            }
             Strategy::MonteCarlo(mc) => rollout::monte_carlo(board, value, &moves, mc),
             Strategy::SolidBaseHighTop(w) => solid_base_high_top(board, value, &moves, w),
             Strategy::MaximizeLookahead => maximize_lookahead(board, value, &moves),
@@ -129,8 +140,10 @@ fn go_up_randomly(moves: &[Move]) -> Vec<usize> {
     indices_on_layer(moves, max_layer(moves))
 }
 
-fn edges_then_up(board: &Board, value: u8, moves: &[Move], max_low: u8) -> Vec<usize> {
-    let options = if value <= max_low {
+/// Pieces worth at most `max_low` (if any) on the base layer, the rest as
+/// high as possible; then most edges touching.
+fn edges_then_up(board: &Board, value: u8, moves: &[Move], max_low: Option<u8>) -> Vec<usize> {
+    let options = if max_low.is_some_and(|m| value <= m) {
         indices_on_layer(moves, 0)
     } else {
         // When every move is on one layer this keeps them all, as in Python.
@@ -266,13 +279,42 @@ mod tests {
     use crate::game::shuffled_tiles;
 
     #[test]
+    fn low_to_base_goes_up_in_the_endgame() {
+        let mut rng = Rng::new(5);
+        let s = Strategy::LowToBase {
+            max_low: 4,
+            endgame: 4,
+        };
+        for _ in 0..20 {
+            let mut board = Board::new();
+            for value in shuffled_tiles(&mut rng) {
+                let d = s.decide(&board, value);
+                let top = d.moves.iter().map(|m| m.layer).max().unwrap();
+                let layers: Vec<usize> = d.candidate_moves().map(|m| m.layer).collect();
+                if TILES - board.pieces().len() <= 4 || value > 4 {
+                    assert!(layers.iter().all(|&l| l == top));
+                } else {
+                    assert!(layers.iter().all(|&l| l == 0));
+                }
+                board
+                    .place(value, d.moves[*rng.choose(&d.candidates)])
+                    .unwrap();
+            }
+        }
+    }
+
+    #[test]
     fn low_to_base_one_is_edges_then_up() {
         let mut rng = Rng::new(2);
         for _ in 0..20 {
             let mut board = Board::new();
             for value in shuffled_tiles(&mut rng) {
                 let d = Strategy::EdgesThenUp.decide(&board, value);
-                assert_eq!(d, Strategy::LowToBase { max_low: 1 }.decide(&board, value));
+                let low = Strategy::LowToBase {
+                    max_low: 1,
+                    endgame: 0,
+                };
+                assert_eq!(d, low.decide(&board, value));
                 board
                     .place(value, d.moves[*rng.choose(&d.candidates)])
                     .unwrap();

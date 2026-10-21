@@ -4,6 +4,9 @@ use crate::board::Board;
 use crate::rng::Rng;
 use crate::strategies::Strategy;
 
+/// Tiles in a game: two of each value 0-9.
+pub const TILES: usize = 20;
+
 /// The twenty tiles (two of each value) in a random order.
 pub fn shuffled_tiles(rng: &mut Rng) -> Vec<u8> {
     let mut tiles: Vec<u8> = (0..2).flat_map(|_| 0..10u8).collect();
