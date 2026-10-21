@@ -42,10 +42,32 @@ Scripts:
 - `optimize_params.py`: random-search the `solid_base_high_top` weights
 - `cargo run --release --manifest-path rust/Cargo.toml --bin bench`: the same benchmark without Python
 
+## play
+
+```sh
+cargo run --release --manifest-path rust/Cargo.toml -p num9-cli
+# or install it as `num9`:
+cargo install --path rust/cli
+num9                 # a random deal
+num9 --seed 42       # the same deal every time
+num9 --tiles 8,3,7,9,8,6,3,2,5,0,6,1,9,2,5,1,4,7,0,4
+```
+
+Slide the tile around with the arrow keys (or the mouse); it lands on
+whatever is underneath, shows the level it would sit on and the points it
+would score, and turns red with the reason when it can't go there. Space
+rotates, enter places, u undoes.
+
+Press **h** to ask the engine for the best move: it plays the rest of the
+game out hundreds of times from each candidate (Monte Carlo rollouts) and
+ranks them by expected final score, also rating the spot you're on. **g**
+moves your tile through its top picks. At the end, the engine plays the same
+deal so you can compare. **?** shows all the keys.
+
 ## testing
 
 ```sh
-cargo test --release --manifest-path rust/Cargo.toml   # engine + golden tests
+cargo test --release --manifest-path rust/Cargo.toml --workspace  # engine, golden and CLI tests
 pytest tests                                           # Python bindings
 ```
 
