@@ -69,6 +69,16 @@ own game. **?** shows all the keys.
 To search a deal on its own: `cargo run --release --manifest-path
 rust/Cargo.toml --bin solve -- --seed 42 --level 3 --per-layer 8`.
 
+## records
+
+The maximum possible score, with the order of the tiles chosen freely, is an
+open problem ("Nmbr9 as a Constraint Programming Challenge", Lagerkvist 2020,
+cites 229 as the best known, from a BoardGameGeek thread). The `tower`
+command designs stacks from the top down and finds a play scoring **236**,
+reaching level 6: see `records/free-order-236.txt`, and check it with
+`python records/check_play.py records/free-order-236.txt` (standard library
+only, independent of the engine).
+
 ## testing
 
 ```sh
