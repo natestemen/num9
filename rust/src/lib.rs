@@ -7,6 +7,7 @@
 
 pub mod board;
 pub mod game;
+pub mod nrpa;
 pub mod piece;
 pub mod rng;
 pub mod rollout;
