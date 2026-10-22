@@ -19,6 +19,7 @@
 use crate::board::{Board, Move, HEIGHT, WIDTH};
 use crate::nrpa::Step;
 use crate::piece::shape;
+use crate::rng::Rng;
 
 /// Side of the design grid (cells); the tower is built around its centre.
 const G: usize = 48;
@@ -496,6 +497,10 @@ pub struct TowerSearch {
     pub top: usize,
     /// How many of each value are available.
     pub tiles: [u8; 10],
+    /// Random jitter (0 = none) added to the beam ranking, so repeated
+    /// runs with different seeds explore different designs.
+    pub noise: i64,
+    pub seed: u64,
 }
 
 /// A designed play: its score and the steps of the game that builds it.
@@ -512,12 +517,14 @@ impl TowerSearch {
     /// keep the `width` most promising (points so far, with designs that
     /// can't reach the ground with the tiles left dropped). Every finished
     /// design is assembled and scored exactly; returns the best.
+    /// `report` is called for every finished design (not only improvements).
     pub fn beam(
         &self,
         width: usize,
         per_design: usize,
         mut report: impl FnMut(&Found),
     ) -> Option<Found> {
+        let mut rng = Rng::new(self.seed);
         let mut beam: Vec<(Design, Vec<Choice>)> = Vec::new();
         let root = Design::new(self.top, self.tiles);
         for c in root.choices() {
@@ -543,13 +550,13 @@ impl TowerSearch {
                     );
                     if child.done {
                         if let Some((score, steps)) = evaluate(&child) {
+                            let f = Found {
+                                score,
+                                steps,
+                                choices,
+                            };
+                            report(&f);
                             if best.as_ref().is_none_or(|b| score > b.score) {
-                                let f = Found {
-                                    score,
-                                    steps,
-                                    choices,
-                                };
-                                report(&f);
                                 best = Some(f);
                             }
                         }
@@ -566,13 +573,25 @@ impl TowerSearch {
             }
             // Most points, less a cost for the area still to be covered and
             // a heavy one for needing more tiles than are left.
-            children.sort_by_key(|(d, _)| {
-                let left: i64 = d.left.iter().map(|&n| n as i64).sum();
-                let short = (d.tiles_needed(self.growth) - left).max(0);
-                std::cmp::Reverse(
-                    d.points() * 2 - self.area_cost * d.bottom_area() as i64 - 40 * short,
-                )
-            });
+            let mut keyed: Vec<(i64, (Design, Vec<Choice>))> = children
+                .into_iter()
+                .map(|c| {
+                    let d = &c.0;
+                    let left: i64 = d.left.iter().map(|&n| n as i64).sum();
+                    let short = (d.tiles_needed(self.growth) - left).max(0);
+                    let jitter = if self.noise > 0 {
+                        rng.below(self.noise as usize + 1) as i64
+                    } else {
+                        0
+                    };
+                    let key = d.points() * 2 - self.area_cost * d.bottom_area() as i64 - 40 * short
+                        + jitter;
+                    (key, c)
+                })
+                .collect();
+            keyed.sort_by_key(|(k, _)| std::cmp::Reverse(*k));
+            let mut children: Vec<(Design, Vec<Choice>)> =
+                keyed.into_iter().map(|(_, c)| c).collect();
             children.truncate(width);
             beam = children;
         }
@@ -593,6 +612,8 @@ mod tests {
             growth: 4,
             top: 4,
             tiles: [2; 10],
+            noise: 0,
+            seed: 0,
         };
         let f = s.beam(10, 4, |_| {}).expect("a design");
         let play = Play {
