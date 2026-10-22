@@ -81,6 +81,14 @@ only, independent of the engine). To step through it in the terminal game:
 `cargo run --release --manifest-path rust/Cargo.toml -p num9-cli -- --replay
 records/free-order-236.txt` (or `num9 --replay ...` if installed).
 
+No play can score more than **354**. `records/bound/upper_bound.py` proves
+it with an integer program over which tiles go on which level, using shape
+facts computed exhaustively by `cargo run --release --bin widening` (how
+much wider the level below one or two tiles must be, and how much area a
+level of two or three tiles can hold up). The table is in
+`records/bound/widening.tsv`, and `records/bound/check_constraints.py`
+confirms every recorded play satisfies the constraints.
+
 ## testing
 
 ```sh
