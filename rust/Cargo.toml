@@ -16,6 +16,10 @@ path = "src/bin/bench.rs"
 name = "solve"
 path = "src/bin/solve.rs"
 
+[[bin]]
+name = "maxscore"
+path = "src/bin/maxscore.rs"
+
 [features]
 # Build the Python extension module (enabled by maturin, see pyproject.toml).
 python = ["dep:pyo3"]
