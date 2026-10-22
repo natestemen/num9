@@ -7,8 +7,9 @@
 //! For each position (the tiles placed so far, up to moving and turning the
 //! whole stack) it computes the best expected score when each next tile is
 //! drawn at random from those left (the game solved), the best score if the
-//! order could be chosen freely, and how many distinct games continue from
-//! it (with `BRUTE_COUNT=1`; counting turns off pruning). Positions are identified by a 128-bit hash of their tiles' cells.
+//! order could be chosen freely, and (with `BRUTE_COUNT=1`, which turns off
+//! pruning) how many distinct games continue from it. Positions are
+//! identified by a 128-bit hash of their tiles' cells.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
