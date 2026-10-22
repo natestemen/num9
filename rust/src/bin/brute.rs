@@ -1,7 +1,8 @@
 //! Solve small versions of the game exactly by visiting every reachable
-//! position: the deck is two of each value below `n`, dealt in random order.
+//! position: the deck is two (or `copies`) of each value below `n`, dealt
+//! in random order.
 //!
-//!     cargo run --release --bin brute -- <n> [max positions]
+//!     cargo run --release --bin brute -- <n> [copies] [max positions]
 //!
 //! For each position (the tiles placed so far, up to moving and turning the
 //! whole stack) it computes the best expected score when each next tile is
@@ -10,6 +11,9 @@
 //! it. Positions are identified by a 128-bit hash of their tiles' cells.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use std::sync::Mutex;
+use std::thread;
 use std::time::Instant;
 
 use num9_core::board::{Board, Move};
@@ -81,139 +85,201 @@ fn key(board: &Board) -> u128 {
         .unwrap()
 }
 
-struct Solver {
-    memo: HashMap<u128, Node>,
-    /// Positions found, by tiles placed.
-    found: Vec<usize>,
+/// Solved positions, shared by every thread (in shards to keep locks short).
+struct Memo {
+    shards: Vec<Mutex<HashMap<u128, Node>>>,
+    /// Positions solved, by tiles placed.
+    found: Vec<AtomicUsize>,
+    total: AtomicUsize,
     limit: usize,
     /// Off only to test that merging positions changes nothing.
     merge: bool,
     start: Instant,
 }
 
-impl Solver {
-    fn moves(board: &Board, value: u8) -> Vec<Move> {
-        if board.pieces().is_empty() {
-            return vec![Board::center_move()];
+impl Memo {
+    fn new(tiles: usize, limit: usize, merge: bool) -> Memo {
+        Memo {
+            shards: (0..256).map(|_| Mutex::new(HashMap::new())).collect(),
+            found: (0..tiles).map(|_| AtomicUsize::new(0)).collect(),
+            total: AtomicUsize::new(0),
+            limit,
+            merge,
+            start: Instant::now(),
         }
-        let mut moves = board.find_valid_moves(value);
-        if shape(value, 0).rows == shape(value, 2).rows {
-            moves.retain(|m| m.rot < 2);
-        }
-        moves
     }
 
-    fn solve(&mut self, board: &mut Board, left: &mut [u8; 10], rem: u32) -> Node {
-        if rem == 0 {
-            let s = board.score();
-            return Node {
-                expected: s as f64,
-                best: s,
-                games: 1,
-            };
+    fn shard(&self, k: u128) -> &Mutex<HashMap<u128, Node>> {
+        &self.shards[k as usize % self.shards.len()]
+    }
+
+    fn get(&self, k: u128) -> Option<Node> {
+        if !self.merge {
+            return None;
         }
-        if rem == 1 {
-            // The last tile goes as high as it can; no need to place it.
-            let v = left.iter().position(|&c| c > 0).unwrap() as u8;
-            let counts = board.count_valid_moves(v);
-            let top = (0..counts.len()).rev().find(|&l| counts[l] > 0).unwrap();
-            let s = board.score() + v as i64 * top as i64;
-            let symmetric = shape(v, 0).rows == shape(v, 2).rows;
-            let games: usize = counts.iter().sum();
-            return Node {
-                expected: s as f64,
-                best: s,
-                games: if symmetric { games / 2 } else { games } as u128,
-            };
+        self.shard(k).lock().unwrap().get(&k).copied()
+    }
+
+    fn insert(&self, k: u128, placed: usize, node: Node) {
+        if self.merge && self.shard(k).lock().unwrap().insert(k, node).is_some() {
+            return; // another thread got here first
         }
-        let k = key(board);
-        if let Some(&node) = self.memo.get(&k).filter(|_| self.merge) {
-            return node;
-        }
-        let mut node = Node {
-            expected: 0.0,
-            best: i64::MIN,
-            games: 0,
-        };
-        for v in 0..10u8 {
-            let copies = left[v as usize];
-            if copies == 0 {
-                continue;
-            }
-            let mut top = f64::MIN;
-            for m in Self::moves(board, v) {
-                board.place(v, m).expect("legal move");
-                left[v as usize] -= 1;
-                let child = self.solve(board, left, rem - 1);
-                left[v as usize] += 1;
-                board.undo();
-                top = top.max(child.expected);
-                node.best = node.best.max(child.best);
-                node.games += child.games;
-            }
-            node.expected += copies as f64 / rem as f64 * top;
-        }
-        self.memo.insert(k, node);
-        let placed = board.pieces().len();
-        self.found[placed] += 1;
-        if self.memo.len().is_multiple_of(1_000_000) {
+        self.found[placed].fetch_add(1, Relaxed);
+        let total = self.total.fetch_add(1, Relaxed) + 1;
+        if total.is_multiple_of(1_000_000) {
             eprintln!(
-                "[{:.0}s] {} positions {:?}",
+                "[{:.0}s] {total} positions {:?}",
                 self.start.elapsed().as_secs_f64(),
-                self.memo.len(),
-                self.found
+                self.found()
             );
         }
-        if self.memo.len() >= self.limit {
+        if total >= self.limit {
             eprintln!("stopping: more than {} positions", self.limit);
             std::process::exit(2);
         }
-        node
     }
+
+    fn found(&self) -> Vec<usize> {
+        self.found.iter().map(|f| f.load(Relaxed)).collect()
+    }
+}
+
+fn moves(board: &Board, value: u8) -> Vec<Move> {
+    if board.pieces().is_empty() {
+        return vec![Board::center_move()];
+    }
+    let mut moves = board.find_valid_moves(value);
+    if shape(value, 0).rows == shape(value, 2).rows {
+        moves.retain(|m| m.rot < 2);
+    }
+    moves
+}
+
+fn solve(memo: &Memo, board: &mut Board, left: &mut [u8; 10], rem: u32) -> Node {
+    if rem == 0 {
+        let s = board.score();
+        return Node {
+            expected: s as f64,
+            best: s,
+            games: 1,
+        };
+    }
+    if rem == 1 {
+        // The last tile goes as high as it can; no need to place it.
+        let v = left.iter().position(|&c| c > 0).unwrap() as u8;
+        let counts = board.count_valid_moves(v);
+        let top = (0..counts.len()).rev().find(|&l| counts[l] > 0).unwrap();
+        let s = board.score() + v as i64 * top as i64;
+        let symmetric = shape(v, 0).rows == shape(v, 2).rows;
+        let games: usize = counts.iter().sum();
+        return Node {
+            expected: s as f64,
+            best: s,
+            games: if symmetric { games / 2 } else { games } as u128,
+        };
+    }
+    let k = key(board);
+    if let Some(node) = memo.get(k) {
+        return node;
+    }
+    let mut node = Node {
+        expected: 0.0,
+        best: i64::MIN,
+        games: 0,
+    };
+    for v in 0..10u8 {
+        let copies = left[v as usize];
+        if copies == 0 {
+            continue;
+        }
+        let mut top = f64::MIN;
+        for m in moves(board, v) {
+            board.place(v, m).expect("legal move");
+            left[v as usize] -= 1;
+            let child = solve(memo, board, left, rem - 1);
+            left[v as usize] += 1;
+            board.undo();
+            top = top.max(child.expected);
+            node.best = node.best.max(child.best);
+            node.games += child.games;
+        }
+        node.expected += copies as f64 / rem as f64 * top;
+    }
+    memo.insert(k, board.pieces().len(), node);
+    node
+}
+
+/// Solve the positions after `split` tiles on every core, then the rest
+/// (which finds those in the memo).
+fn solve_parallel(memo: &Memo, left: [u8; 10], split: usize) -> Node {
+    type Job = (Vec<(u8, Move)>, [u8; 10]);
+    fn expand(board: &mut Board, left: &mut [u8; 10], depth: usize, jobs: &mut HashMap<u128, Job>) {
+        if depth == 0 {
+            let steps = board.pieces().iter().map(|p| (p.value, p.mv)).collect();
+            jobs.entry(key(board)).or_insert((steps, *left));
+            return;
+        }
+        for v in 0..10u8 {
+            if left[v as usize] == 0 {
+                continue;
+            }
+            for m in moves(board, v) {
+                board.place(v, m).expect("legal move");
+                left[v as usize] -= 1;
+                expand(board, left, depth - 1, jobs);
+                left[v as usize] += 1;
+                board.undo();
+            }
+        }
+    }
+    let rem: u32 = left.iter().map(|&c| c as u32).sum();
+    let mut jobs = HashMap::new();
+    expand(&mut Board::new(), &mut left.clone(), split, &mut jobs);
+    let jobs: Vec<Job> = jobs.into_values().collect();
+    let next = AtomicUsize::new(0);
+    thread::scope(|s| {
+        for _ in 0..thread::available_parallelism().map_or(1, |n| n.get()) {
+            s.spawn(|| {
+                while let Some((steps, left)) = jobs.get(next.fetch_add(1, Relaxed)) {
+                    let mut board = Board::new();
+                    for &(v, m) in steps {
+                        board.place(v, m).expect("legal move");
+                    }
+                    solve(memo, &mut board, &mut left.clone(), rem - split as u32);
+                }
+            });
+        }
+    });
+    solve(memo, &mut Board::new(), &mut left.clone(), rem)
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let n: usize = args.get(1).and_then(|a| a.parse().ok()).unwrap_or(2);
-    let limit = args
-        .get(2)
-        .and_then(|a| a.parse().ok())
-        .unwrap_or(100_000_000);
+    let arg =
+        |k: usize, default: usize| args.get(k).and_then(|a| a.parse().ok()).unwrap_or(default);
+    let (n, copies, limit) = (arg(1, 2), arg(2, 2), arg(3, 200_000_000));
     let mut left = [0u8; 10];
-    left[..n].fill(2);
-    let tiles = 2 * n as u32;
-    let mut solver = Solver {
-        memo: HashMap::new(),
-        found: vec![0; tiles as usize],
-        limit,
-        merge: true,
-        start: Instant::now(),
-    };
-    let root = solver.solve(&mut Board::new(), &mut left, tiles);
-    println!("values 0..{}, two of each ({tiles} tiles)", n - 1);
-    println!("positions (by tiles placed): {:?}", solver.found);
-    println!("positions in all: {}", solver.memo.len());
+    left[..n].fill(copies as u8);
+    let tiles = n * copies;
+    let memo = Memo::new(tiles, limit, true);
+    let root = solve_parallel(&memo, left, tiles.saturating_sub(2).min(3));
+    println!("values 0..{}, {copies} of each ({tiles} tiles)", n - 1);
+    println!("positions (by tiles placed): {:?}", memo.found());
+    println!("positions in all: {}", memo.total.load(Relaxed));
     println!("distinct games: {}", root.games);
     println!("best expected score (random order): {:.4}", root.expected);
     println!("best score (order chosen freely): {}", root.best);
-    println!("time: {:.1}s", solver.start.elapsed().as_secs_f64());
+    println!("time: {:.1}s", memo.start.elapsed().as_secs_f64());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn solve(left: [u8; 10], merge: bool) -> (Node, usize) {
-        let mut solver = Solver {
-            memo: HashMap::new(),
-            found: vec![0; 20],
-            limit: usize::MAX,
-            merge,
-            start: Instant::now(),
-        };
-        let rem = left.iter().map(|&c| c as u32).sum();
-        let node = solver.solve(&mut Board::new(), &mut left.clone(), rem);
-        (node, solver.found.iter().sum())
+    fn run(left: [u8; 10], merge: bool) -> (Node, usize) {
+        let memo = Memo::new(20, usize::MAX, merge);
+        let node = solve_parallel(&memo, left, 2);
+        (node, memo.found().iter().sum())
     }
 
     #[test]
@@ -222,8 +288,8 @@ mod tests {
             [2, 2, 0, 0, 0, 0, 0, 0, 0, 0],
             [1, 1, 0, 0, 0, 0, 0, 0, 1, 1],
         ] {
-            let (merged, positions) = solve(left, true);
-            let (plain, visits) = solve(left, false);
+            let (merged, positions) = run(left, true);
+            let (plain, visits) = run(left, false);
             assert!(positions < visits, "{positions} positions, {visits} visits");
             assert_eq!(merged.games, plain.games);
             assert_eq!(merged.best, plain.best);
@@ -236,14 +302,14 @@ mod tests {
         let mut a = Board::new();
         a.place(3, Board::center_move()).unwrap();
         let mut keys = Vec::new();
-        for m in Solver::moves(&a, 5) {
+        for m in moves(&a, 5) {
             a.place(5, m).unwrap();
             keys.push(key(&a));
             a.undo();
         }
         let mut b = Board::new();
         b.place(5, Board::center_move()).unwrap();
-        for m in Solver::moves(&b, 3).into_iter().filter(|m| m.rot == 1) {
+        for m in moves(&b, 3).into_iter().filter(|m| m.rot == 1) {
             b.place(3, m).unwrap();
             assert!(keys.contains(&key(&b)), "{m:?}");
             b.undo();
