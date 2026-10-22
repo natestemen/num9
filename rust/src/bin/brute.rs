@@ -12,6 +12,7 @@
 //! identified by a 128-bit hash of their tiles' cells.
 
 use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use std::sync::Mutex;
 use std::thread;
@@ -86,9 +87,30 @@ fn key(board: &Board) -> u128 {
         .unwrap()
 }
 
-/// Solved positions, shared by every thread (in shards to keep locks short).
+/// Keys are already hashes: use their high half as is.
+#[derive(Default)]
+struct Prehashed(u64);
+
+impl Hasher for Prehashed {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, _: &[u8]) {
+        unreachable!("only u128 keys")
+    }
+    fn write_u128(&mut self, k: u128) {
+        self.0 = (k >> 64) as u64;
+    }
+}
+
+type Table<V> = HashMap<u128, V, BuildHasherDefault<Prehashed>>;
+
+/// Solved positions, shared by every thread (in shards, picked by the low
+/// half of the key, to keep locks short). Kept small: games are stored
+/// apart, and only when counting.
 struct Memo {
-    shards: Vec<Mutex<HashMap<u128, Node>>>,
+    shards: Vec<Mutex<Table<(f64, i16)>>>,
+    games: Vec<Mutex<Table<u128>>>,
     /// Positions solved, by tiles placed.
     found: Vec<AtomicUsize>,
     total: AtomicUsize,
@@ -103,7 +125,8 @@ struct Memo {
 impl Memo {
     fn new(tiles: usize, limit: usize, merge: bool, count: bool) -> Memo {
         Memo {
-            shards: (0..256).map(|_| Mutex::new(HashMap::new())).collect(),
+            shards: (0..256).map(|_| Mutex::default()).collect(),
+            games: (0..256).map(|_| Mutex::default()).collect(),
             found: (0..tiles).map(|_| AtomicUsize::new(0)).collect(),
             total: AtomicUsize::new(0),
             limit,
@@ -113,20 +136,34 @@ impl Memo {
         }
     }
 
-    fn shard(&self, k: u128) -> &Mutex<HashMap<u128, Node>> {
-        &self.shards[k as usize % self.shards.len()]
-    }
-
     fn get(&self, k: u128) -> Option<Node> {
         if !self.merge {
             return None;
         }
-        self.shard(k).lock().unwrap().get(&k).copied()
+        let s = k as usize % self.shards.len();
+        let (expected, best) = *self.shards[s].lock().unwrap().get(&k)?;
+        let games = if self.count {
+            self.games[s].lock().unwrap()[&k]
+        } else {
+            0
+        };
+        Some(Node {
+            expected,
+            best: best as i64,
+            games,
+        })
     }
 
     fn insert(&self, k: u128, placed: usize, node: Node) {
-        if self.merge && self.shard(k).lock().unwrap().insert(k, node).is_some() {
-            return; // another thread got here first
+        if self.merge {
+            let s = k as usize % self.shards.len();
+            if self.count {
+                self.games[s].lock().unwrap().insert(k, node.games);
+            }
+            let value = (node.expected, node.best as i16);
+            if self.shards[s].lock().unwrap().insert(k, value).is_some() {
+                return; // another thread got here first
+            }
         }
         self.found[placed].fetch_add(1, Relaxed);
         let total = self.total.fetch_add(1, Relaxed) + 1;
