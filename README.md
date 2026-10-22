@@ -62,7 +62,12 @@ Press **h** to ask the engine for the best move: it plays the rest of the
 game out hundreds of times from each candidate (Monte Carlo rollouts) and
 ranks them by expected final score, also rating the spot you're on. **g**
 moves your tile through its top picks. At the end, the engine plays the same
-deal so you can compare. **?** shows all the keys.
+deal so you can compare, and searches for the best play of that exact deal
+(now that the order is known); press **b** to step through it next to your
+own game. **?** shows all the keys.
+
+To search a deal on its own: `cargo run --release --manifest-path
+rust/Cargo.toml --bin solve -- --seed 42 --level 3 --per-layer 8`.
 
 ## testing
 
