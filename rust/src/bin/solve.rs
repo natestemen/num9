@@ -13,7 +13,10 @@ use num9_core::solver::{verify, Nested, Solution};
 use num9_core::{Rng, Strategy};
 
 fn usage() -> ! {
-    eprintln!("usage: solve [--seed N | --tiles a,b,...] [--level L] [--per-layer K] [--restarts R] [--threads T]");
+    eprintln!(
+        "usage: solve [--seed N | --tiles a,b,...] [--level L] [--per-layer K] [--restarts R] \
+         [--threads T] [--max-low V] [--endgame N]"
+    );
     std::process::exit(2)
 }
 
@@ -40,6 +43,16 @@ fn main() {
             "--per-layer" => nested.per_layer = num(),
             "--restarts" => restarts = num().max(1),
             "--threads" => nested.threads = num().max(1),
+            "--max-low" | "--endgame" => {
+                let Strategy::LowToBase { max_low, endgame } = &mut nested.policy else {
+                    unreachable!()
+                };
+                if flag == "--max-low" {
+                    *max_low = num() as u8;
+                } else {
+                    *endgame = num() as u8;
+                }
+            }
             _ => usage(),
         }
     }
