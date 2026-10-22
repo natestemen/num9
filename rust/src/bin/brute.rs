@@ -8,7 +8,7 @@
 //! whole stack) it computes the best expected score when each next tile is
 //! drawn at random from those left (the game solved), the best score if the
 //! order could be chosen freely, and how many distinct games continue from
-//! it. Positions are identified by a 128-bit hash of their tiles' cells.
+//! it (with `BRUTE_COUNT=1`; counting turns off pruning). Positions are identified by a 128-bit hash of their tiles' cells.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
@@ -16,7 +16,7 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Instant;
 
-use num9_core::board::{Board, Move};
+use num9_core::board::{Board, Move, DEPTH};
 use num9_core::piece::shape;
 
 #[derive(Clone, Copy)]
@@ -94,17 +94,20 @@ struct Memo {
     limit: usize,
     /// Off only to test that merging positions changes nothing.
     merge: bool,
+    /// Count every game (slow: no pruning); otherwise `games` stays 0.
+    count: bool,
     start: Instant,
 }
 
 impl Memo {
-    fn new(tiles: usize, limit: usize, merge: bool) -> Memo {
+    fn new(tiles: usize, limit: usize, merge: bool, count: bool) -> Memo {
         Memo {
             shards: (0..256).map(|_| Mutex::new(HashMap::new())).collect(),
             found: (0..tiles).map(|_| AtomicUsize::new(0)).collect(),
             total: AtomicUsize::new(0),
             limit,
             merge,
+            count,
             start: Instant::now(),
         }
     }
@@ -170,7 +173,7 @@ fn solve(memo: &Memo, board: &mut Board, left: &mut [u8; 10], rem: u32) -> Node 
         let counts = board.count_valid_moves(v);
         let top = (0..counts.len()).rev().find(|&l| counts[l] > 0).unwrap();
         let s = board.score() + v as i64 * top as i64;
-        let symmetric = shape(v, 0).rows == shape(v, 2).rows;
+        let symmetric = shape(v, 0).rows == shape(v, 2).rows && !board.pieces().is_empty();
         let games: usize = counts.iter().sum();
         return Node {
             expected: s as f64,
@@ -180,6 +183,11 @@ fn solve(memo: &Memo, board: &mut Board, left: &mut [u8; 10], rem: u32) -> Node 
     }
     let k = key(board);
     if let Some(node) = memo.get(k) {
+        return node;
+    }
+    if rem == 2 && !memo.count {
+        let node = last_two(board, left);
+        memo.insert(k, board.pieces().len(), node);
         return node;
     }
     let mut node = Node {
@@ -206,6 +214,61 @@ fn solve(memo: &Memo, board: &mut Board, left: &mut [u8; 10], rem: u32) -> Node 
         node.expected += copies as f64 / rem as f64 * top;
     }
     memo.insert(k, board.pieces().len(), node);
+    node
+}
+
+/// The highest layer `value` can go on.
+fn reach(board: &Board, value: u8) -> i64 {
+    let counts = board.count_valid_moves(value);
+    (0..counts.len()).rev().find(|&l| counts[l] > 0).unwrap() as i64
+}
+
+/// The two tiles left, in either order, with the second as high as it can
+/// go. Placements of the first are tried in order of an optimistic score
+/// (the second lands at most one layer above the stack), stopping once
+/// that cannot beat the best found.
+fn last_two(board: &mut Board, left: &[u8; 10]) -> Node {
+    let tiles: Vec<u8> = (0..10u8)
+        .flat_map(|v| std::iter::repeat_n(v, left[v as usize] as usize))
+        .collect();
+    let (a, b) = (tiles[0], tiles[1]);
+    let orders = if a == b {
+        vec![(a, b)]
+    } else {
+        vec![(a, b), (b, a)]
+    };
+    let top = (0..DEPTH)
+        .rev()
+        .find(|&l| !board.layer_is_empty(l))
+        .map_or(-1, |l| l as i64);
+    let mut node = Node {
+        expected: 0.0,
+        best: i64::MIN,
+        games: 0,
+    };
+    for &(first, second) in &orders {
+        let base = board.score();
+        let mut options: Vec<(i64, Move)> = moves(board, first)
+            .into_iter()
+            .map(|m| {
+                let l = m.layer as i64;
+                let above = (top.max(l) + 1).min(DEPTH as i64 - 1);
+                (base + first as i64 * l + second as i64 * above, m)
+            })
+            .collect();
+        options.sort_by_key(|&(bound, _)| std::cmp::Reverse(bound));
+        let mut got = i64::MIN;
+        for (bound, m) in options {
+            if bound <= got {
+                break;
+            }
+            board.place(first, m).expect("legal move");
+            got = got.max(board.score() + second as i64 * reach(board, second));
+            board.undo();
+        }
+        node.expected += got as f64 / orders.len() as f64;
+        node.best = node.best.max(got);
+    }
     node
 }
 
@@ -258,15 +321,18 @@ fn main() {
     let arg =
         |k: usize, default: usize| args.get(k).and_then(|a| a.parse().ok()).unwrap_or(default);
     let (n, copies, limit) = (arg(1, 2), arg(2, 2), arg(3, 200_000_000));
+    let count = std::env::var_os("BRUTE_COUNT").is_some();
     let mut left = [0u8; 10];
     left[..n].fill(copies as u8);
     let tiles = n * copies;
-    let memo = Memo::new(tiles, limit, true);
+    let memo = Memo::new(tiles, limit, true, count);
     let root = solve_parallel(&memo, left, tiles.saturating_sub(2).min(3));
     println!("values 0..{}, {copies} of each ({tiles} tiles)", n - 1);
     println!("positions (by tiles placed): {:?}", memo.found());
     println!("positions in all: {}", memo.total.load(Relaxed));
-    println!("distinct games: {}", root.games);
+    if count {
+        println!("distinct games: {}", root.games);
+    }
     println!("best expected score (random order): {:.4}", root.expected);
     println!("best score (order chosen freely): {}", root.best);
     println!("time: {:.1}s", memo.start.elapsed().as_secs_f64());
@@ -277,7 +343,7 @@ mod tests {
     use super::*;
 
     fn run(left: [u8; 10], merge: bool) -> (Node, usize) {
-        let memo = Memo::new(20, usize::MAX, merge);
+        let memo = Memo::new(20, usize::MAX, merge, true);
         let node = solve_parallel(&memo, left, 2);
         (node, memo.found().iter().sum())
     }
@@ -294,6 +360,20 @@ mod tests {
             assert_eq!(merged.games, plain.games);
             assert_eq!(merged.best, plain.best);
             assert!((merged.expected - plain.expected).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn pruning_the_last_two_tiles_changes_nothing() {
+        for left in [
+            [2, 2, 1, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0, 0, 1, 1, 0, 1],
+            [0, 0, 0, 0, 0, 0, 0, 0, 2, 2],
+        ] {
+            let (full, _) = run(left, true);
+            let pruned = solve_parallel(&Memo::new(20, usize::MAX, true, false), left, 2);
+            assert_eq!(full.best, pruned.best, "{left:?}");
+            assert!((full.expected - pruned.expected).abs() < 1e-9, "{left:?}");
         }
     }
 
