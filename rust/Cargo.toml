@@ -24,6 +24,10 @@ path = "src/bin/maxscore.rs"
 name = "tower"
 path = "src/bin/tower.rs"
 
+[[bin]]
+name = "widening"
+path = "src/bin/widening.rs"
+
 [features]
 # Build the Python extension module (enabled by maturin, see pyproject.toml).
 python = ["dep:pyo3"]
