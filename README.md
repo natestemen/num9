@@ -77,7 +77,9 @@ cites 229 as the best known, from a BoardGameGeek thread). The `tower`
 command designs stacks from the top down and finds a play scoring **236**,
 reaching level 6: see `records/free-order-236.txt`, and check it with
 `python records/check_play.py records/free-order-236.txt` (standard library
-only, independent of the engine).
+only, independent of the engine). To step through it in the terminal game:
+`cargo run --release --manifest-path rust/Cargo.toml -p num9-cli -- --replay
+records/free-order-236.txt` (or `num9 --replay ...` if installed).
 
 ## testing
 
