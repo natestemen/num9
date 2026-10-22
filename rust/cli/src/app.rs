@@ -7,13 +7,14 @@ use std::time::{Duration, Instant};
 
 use num9_core::game::{play_tiles, shuffled_tiles};
 use num9_core::rollout::MonteCarlo;
-use num9_core::{Rng, Strategy};
+use num9_core::{Board, Rng, Strategy};
 use ratatui::crossterm::event::{
     KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 use ratatui::layout::Rect;
 
-use crate::game::Game;
+use crate::analysis::{self, Analysis};
+use crate::game::{replay, Game, TopView, TILES};
 use crate::hint::Hint;
 
 /// How many of the engine's top moves the player can browse.
@@ -47,6 +48,25 @@ pub struct Rival {
     pub score: Option<i64>,
 }
 
+/// Which play is shown when reviewing a finished game.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Play {
+    Yours,
+    Best,
+}
+
+/// Stepping through a finished game, the player's play or the best found.
+pub struct Review {
+    pub play: Play,
+    /// Tiles placed in the position shown (1 to `TILES`).
+    pub step: usize,
+    pub board: Board,
+    pub top: TopView,
+    /// Ground-level extent of both plays (min_i, max_i, min_j, max_j), so
+    /// the view stays put when switching between them.
+    pub extent: (usize, usize, usize, usize),
+}
+
 /// Which part of the board is on screen (in board cells).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Viewport {
@@ -70,6 +90,14 @@ pub struct App {
     /// Which of the top suggestions is shown on the board (0 = best).
     pub suggestion: usize,
     pub rival: Option<Rival>,
+    /// The search for the best play of a finished deal.
+    pub analysis: Option<Analysis>,
+    /// Its stages (see [`analysis::STAGES`]).
+    pub analysis_stages: &'static [(usize, usize)],
+    pub review: Option<Review>,
+    /// Set when showing a recorded play rather than a game played here: a
+    /// name for it (e.g. the file it came from).
+    pub replay: Option<String>,
     pub message: Option<Message>,
     /// A destructive key (quit / new game) waiting for confirmation.
     pub confirm: Option<KeyCode>,
@@ -93,6 +121,10 @@ impl App {
             show_hint: false,
             suggestion: 0,
             rival: None,
+            analysis: None,
+            analysis_stages: analysis::STAGES,
+            review: None,
+            replay: None,
             message: None,
             confirm: None,
             quit: false,
@@ -122,6 +154,17 @@ impl App {
                 changed = true;
             }
         }
+        if let Some(a) = &mut self.analysis {
+            if a.poll() {
+                changed = true;
+                // Keep a review of the best play in step with improvements.
+                if let Some(r) = &self.review {
+                    if r.play == Play::Best {
+                        self.show_review(Play::Best, r.step);
+                    }
+                }
+            }
+        }
         if self
             .message
             .as_ref()
@@ -137,6 +180,7 @@ impl App {
     pub fn busy(&self) -> bool {
         self.hint.as_ref().is_some_and(|h| !h.finished())
             || self.rival.as_ref().is_some_and(|r| r.score.is_none())
+            || self.analysis.as_ref().is_some_and(|a| !a.finished())
     }
 
     /// The hint, if it is about the position on the board now.
@@ -212,6 +256,10 @@ impl App {
                 self.show_hint = false;
                 if self.game.is_over() {
                     self.start_rival();
+                    self.analysis = Some(Analysis::start(
+                        self.game.tiles.clone(),
+                        self.analysis_stages,
+                    ));
                 }
             }
             Err(problem) => self.say(problem.describe(), Tone::Bad),
@@ -233,6 +281,8 @@ impl App {
     fn undo(&mut self) {
         if self.game.undo() {
             self.rival = None;
+            self.analysis = None;
+            self.review = None;
             self.show_hint = false;
             self.say("Took the last tile back", Tone::Info);
         } else {
@@ -245,7 +295,96 @@ impl App {
         if tiles.is_none() {
             self.seed = self.seed.wrapping_add(1);
         }
+        let stages = self.analysis_stages;
         *self = App::new(self.seed, tiles, self.hint_rollouts);
+        self.analysis_stages = stages;
+    }
+
+    /// Show a recorded play (tile values and moves in order), stepping
+    /// through it from the first tile. Fails if a move breaks the rules.
+    pub fn replay(
+        name: String,
+        steps: &[(u8, num9_core::Move)],
+        hint_rollouts: usize,
+    ) -> Result<App, String> {
+        let game = Game::from_play(steps)?;
+        let mut app = App::new(0, Some(game.tiles.clone()), hint_rollouts);
+        app.game = game;
+        app.replay = Some(name);
+        app.show_review(Play::Yours, 1);
+        Ok(app)
+    }
+
+    fn toggle_view(&mut self) {
+        self.view = match self.view {
+            View::Tiles => View::Height,
+            View::Height => View::Tiles,
+        };
+    }
+
+    /// The moves of a finished play, if available.
+    fn moves_of(&self, play: Play) -> Option<Vec<num9_core::Move>> {
+        match play {
+            Play::Yours => Some(self.game.board.pieces().iter().map(|p| p.mv).collect()),
+            Play::Best => Some(self.analysis.as_ref()?.best.as_ref()?.moves.clone()),
+        }
+    }
+
+    /// Show `play` after `step` tiles (clamped to the game).
+    fn show_review(&mut self, play: Play, step: usize) {
+        let Some(moves) = self.moves_of(play) else {
+            self.say("Still looking for the best play…", Tone::Info);
+            return;
+        };
+        let step = step.clamp(1, TILES);
+        let tiles = &self.game.tiles;
+        let board = replay(tiles, &moves, step);
+        // Frame both plays the same way.
+        let mut extent = (usize::MAX, 0, usize::MAX, 0);
+        for p in [Play::Yours, Play::Best] {
+            if let Some(m) = self.moves_of(p) {
+                if let Some((a, b, c, d)) = replay(tiles, &m, TILES).layer_bbox(0) {
+                    extent = (
+                        extent.0.min(a),
+                        extent.1.max(b),
+                        extent.2.min(c),
+                        extent.3.max(d),
+                    );
+                }
+            }
+        }
+        self.review = Some(Review {
+            play,
+            step,
+            top: TopView::new(&board),
+            board,
+            extent,
+        });
+    }
+
+    fn on_review_key(&mut self, key: KeyEvent) {
+        let Some(r) = &self.review else { return };
+        let (play, step) = (r.play, r.step);
+        match key.code {
+            KeyCode::Left | KeyCode::Char('a') => self.show_review(play, step.saturating_sub(1)),
+            KeyCode::Right | KeyCode::Char('d') => self.show_review(play, step + 1),
+            KeyCode::Home => self.show_review(play, 1),
+            KeyCode::End => self.show_review(play, TILES),
+            // With no other play to compare, tab switches the view instead.
+            KeyCode::Tab if self.moves_of(Play::Best).is_none() => self.toggle_view(),
+            KeyCode::Tab | KeyCode::Char('b') => {
+                let other = if play == Play::Yours {
+                    Play::Best
+                } else {
+                    Play::Yours
+                };
+                self.show_review(other, step);
+            }
+            KeyCode::Char('v') => self.toggle_view(),
+            KeyCode::Esc | KeyCode::Char('q') => self.review = None,
+            KeyCode::Char('?') => self.help = true,
+            _ => {}
+        }
     }
 
     /// Run `key`'s action now if it is harmless; otherwise ask to press it
@@ -278,8 +417,20 @@ impl App {
                 return;
             }
         }
+        if self.review.is_some() {
+            self.on_review_key(key);
+            return;
+        }
         if self.game.is_over() {
             match key.code {
+                KeyCode::Char('b') => {
+                    let play = if self.moves_of(Play::Best).is_some() {
+                        Play::Best
+                    } else {
+                        Play::Yours
+                    };
+                    self.show_review(play, TILES);
+                }
                 KeyCode::Char('n') => self.restart(None),
                 KeyCode::Char('r') => self.restart(Some(self.game.tiles.clone())),
                 KeyCode::Char('u') | KeyCode::Backspace => self.undo(),
@@ -309,12 +460,7 @@ impl App {
             KeyCode::Char('h') => self.ask_hint(),
             KeyCode::Char('g') => self.jump_to_hint(None),
             KeyCode::Char(c @ '1'..='9') => self.jump_to_hint(Some(c as usize - '1' as usize)),
-            KeyCode::Tab | KeyCode::Char('v') => {
-                self.view = match self.view {
-                    View::Tiles => View::Height,
-                    View::Height => View::Tiles,
-                };
-            }
+            KeyCode::Tab | KeyCode::Char('v') => self.toggle_view(),
             KeyCode::Char('?') => self.help = true,
             KeyCode::Esc => self.show_hint = false,
             KeyCode::Char(c @ ('q' | 'n')) => {
@@ -346,7 +492,7 @@ impl App {
     }
 
     pub fn on_mouse(&mut self, mouse: MouseEvent) {
-        if self.help || self.game.is_over() {
+        if self.help || self.game.is_over() || self.review.is_some() {
             return;
         }
         match mouse.kind {
@@ -467,6 +613,80 @@ mod tests {
             a.on_key(key(KeyCode::Char('h')));
             assert_eq!(a.current_hint().unwrap().asked_at, a.ghost_move());
         }
+    }
+
+    #[test]
+    fn the_best_play_is_found_after_the_game_and_can_be_stepped_through() {
+        let mut a = app();
+        a.analysis_stages = &[(1, 2), (1, 4)];
+        while !a.game.is_over() {
+            let v = a.game.current().unwrap();
+            let mv = a.game.board.find_valid_moves(v)[0];
+            a.game.jump_to(mv);
+            a.on_key(key(KeyCode::Enter));
+        }
+        let start = Instant::now();
+        while !a.analysis.as_ref().unwrap().finished() {
+            a.tick();
+            assert!(start.elapsed() < Duration::from_secs(60));
+            thread::sleep(Duration::from_millis(5));
+        }
+        a.tick();
+        let best = a.analysis.as_ref().unwrap().best.clone().unwrap();
+        assert_eq!(
+            num9_core::solver::verify(&a.game.tiles, &best.moves),
+            Ok(best.score)
+        );
+
+        a.on_key(key(KeyCode::Char('b')));
+        let r = a.review.as_ref().unwrap();
+        assert_eq!(
+            (r.play, r.step, r.board.score()),
+            (Play::Best, TILES, best.score)
+        );
+        a.on_key(key(KeyCode::Home));
+        a.on_key(key(KeyCode::Right));
+        assert_eq!(a.review.as_ref().unwrap().step, 2);
+        a.on_key(key(KeyCode::Tab));
+        let r = a.review.as_ref().unwrap();
+        assert_eq!((r.play, r.step), (Play::Yours, 2));
+        assert_eq!(r.board.pieces(), &a.game.board.pieces()[..2]);
+        a.on_key(key(KeyCode::Esc));
+        assert!(a.review.is_none() && a.game.is_over());
+        // Undoing the last tile abandons the analysis.
+        a.on_key(key(KeyCode::Char('u')));
+        assert!(a.analysis.is_none() && !a.game.is_over());
+    }
+
+    #[test]
+    fn a_recorded_play_opens_in_review_and_steps_through() {
+        let mut a = app();
+        while !a.game.is_over() {
+            a.game.place().unwrap();
+        }
+        let steps: Vec<(u8, num9_core::Move)> = a
+            .game
+            .board
+            .pieces()
+            .iter()
+            .map(|p| (p.value, p.mv))
+            .collect();
+        let mut r = App::replay("test".into(), &steps, 16).unwrap();
+        assert!(
+            r.analysis.is_none() && r.rival.is_none(),
+            "nothing to compute for a replay"
+        );
+        assert_eq!(r.review.as_ref().unwrap().step, 1);
+        r.on_key(key(KeyCode::End));
+        let rv = r.review.as_ref().unwrap();
+        assert_eq!((rv.step, rv.board.score()), (TILES, a.game.board.score()));
+        r.on_key(key(KeyCode::Tab));
+        assert_eq!(
+            r.view,
+            View::Height,
+            "tab switches the view when there's one play"
+        );
+        assert_eq!(r.review.as_ref().unwrap().play, Play::Yours);
     }
 
     #[test]

@@ -12,6 +12,18 @@ crate-type = ["cdylib", "rlib"]
 name = "bench"
 path = "src/bin/bench.rs"
 
+[[bin]]
+name = "solve"
+path = "src/bin/solve.rs"
+
+[[bin]]
+name = "maxscore"
+path = "src/bin/maxscore.rs"
+
+[[bin]]
+name = "tower"
+path = "src/bin/tower.rs"
+
 [features]
 # Build the Python extension module (enabled by maturin, see pyproject.toml).
 python = ["dep:pyo3"]

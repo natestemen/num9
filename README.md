@@ -62,7 +62,24 @@ Press **h** to ask the engine for the best move: it plays the rest of the
 game out hundreds of times from each candidate (Monte Carlo rollouts) and
 ranks them by expected final score, also rating the spot you're on. **g**
 moves your tile through its top picks. At the end, the engine plays the same
-deal so you can compare. **?** shows all the keys.
+deal so you can compare, and searches for the best play of that exact deal
+(now that the order is known); press **b** to step through it next to your
+own game. **?** shows all the keys.
+
+To search a deal on its own: `cargo run --release --manifest-path
+rust/Cargo.toml --bin solve -- --seed 42 --level 3 --per-layer 8`.
+
+## records
+
+The maximum possible score, with the order of the tiles chosen freely, is an
+open problem ("Nmbr9 as a Constraint Programming Challenge", Lagerkvist 2020,
+cites 229 as the best known, from a BoardGameGeek thread). The `tower`
+command designs stacks from the top down and finds a play scoring **236**,
+reaching level 6: see `records/free-order-236.txt`, and check it with
+`python records/check_play.py records/free-order-236.txt` (standard library
+only, independent of the engine). To step through it in the terminal game:
+`cargo run --release --manifest-path rust/Cargo.toml -p num9-cli -- --replay
+records/free-order-236.txt` (or `num9 --replay ...` if installed).
 
 ## testing
 

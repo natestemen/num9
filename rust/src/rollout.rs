@@ -29,7 +29,10 @@ impl Default for MonteCarlo {
         MonteCarlo {
             per_layer: 4,
             rollouts: 64,
-            policy: Box::new(Strategy::LowToBase { max_low: 3 }),
+            policy: Box::new(Strategy::LowToBase {
+                max_low: 4,
+                endgame: 4,
+            }),
             seed: 0,
         }
     }
@@ -153,7 +156,11 @@ mod tests {
         let mut rng = Rng::new(3);
         let mut board = Board::new();
         for value in shuffled_tiles(&mut rng).into_iter().take(12) {
-            let mv = Strategy::LowToBase { max_low: 3 }.choose(&board, value, &mut rng);
+            let mv = Strategy::LowToBase {
+                max_low: 3,
+                endgame: 0,
+            }
+            .choose(&board, value, &mut rng);
             board.place(value, mv).unwrap();
         }
         for value in 0..10u8 {

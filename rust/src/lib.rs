@@ -8,10 +8,13 @@
 pub mod board;
 pub mod encode;
 pub mod game;
+pub mod nrpa;
 pub mod piece;
 pub mod rng;
 pub mod rollout;
+pub mod solver;
 pub mod strategies;
+pub mod tower;
 
 #[cfg(feature = "python")]
 mod python;
