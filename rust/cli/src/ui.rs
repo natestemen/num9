@@ -10,8 +10,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Gauge, Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::app::{App, Tone, View, Viewport, SUGGESTIONS};
-use crate::game::{Preview, Problem, TILES};
+use crate::app::{App, Play, Review, Tone, View, Viewport, SUGGESTIONS};
+use crate::game::{label_cell, Preview, Problem, TILES};
 use crate::theme;
 
 const PANEL_WIDTH: u16 = 36;
@@ -32,9 +32,12 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     let [board, panel] =
         Layout::horizontal([Constraint::Min(1), Constraint::Length(PANEL_WIDTH)]).areas(main);
     draw_board(frame, app, board);
-    draw_panel(frame, app, panel);
+    match &app.review {
+        Some(r) => draw_review_panel(frame, app, r, panel),
+        None => draw_panel(frame, app, panel),
+    }
     draw_keys(frame, app, keys);
-    if app.game.is_over() && !app.hide_summary {
+    if app.game.is_over() && !app.hide_summary && app.review.is_none() {
         draw_game_over(frame, app, board);
     }
     if app.help {
@@ -100,21 +103,47 @@ fn footprint(value: u8, mv: Move) -> impl Iterator<Item = (usize, usize)> {
         .map(move |(r, c)| (mv.i + r, mv.j + c))
 }
 
+/// Centre the view on a reviewed game (both plays, so switching is steady).
+fn frame_review(r: &Review, rows: usize, cols: usize) -> Viewport {
+    let (a, b, c, d) = r.extent;
+    Viewport {
+        top: ((a + b) / 2)
+            .saturating_sub(rows / 2)
+            .min(HEIGHT.saturating_sub(rows)),
+        left: ((c + d) / 2)
+            .saturating_sub(cols / 2)
+            .min(WIDTH.saturating_sub(cols)),
+        rows,
+        cols,
+    }
+}
+
 fn draw_board(frame: &mut Frame, app: &mut App, area: Rect) {
-    let title = match app.view {
-        View::Tiles => "Board",
-        View::Height => "Board · height map",
+    let title = match (&app.review, app.view) {
+        (Some(r), _) => match r.play {
+            Play::Yours => format!("Your game · tile {} of {TILES}", r.step),
+            Play::Best => format!("Best play found · tile {} of {TILES}", r.step),
+        },
+        (None, View::Tiles) => "Board".to_string(),
+        (None, View::Height) => "Board · height map".to_string(),
     };
-    let outer = block(title);
+    let outer = block(&title);
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
     app.board_area = inner;
     let rows = inner.height as usize;
     let cols = inner.width as usize / 2;
-    let v = follow(app, rows, cols);
+    let v = match &app.review {
+        Some(r) => frame_review(r, rows, cols),
+        None => follow(app, rows, cols),
+    };
     let game = &app.game;
+    let (board, top) = match &app.review {
+        Some(r) => (&r.board, &r.top),
+        None => (&game.board, &game.top),
+    };
     let buf = frame.buffer_mut();
-    let last = game.placed().checked_sub(1);
+    let last = board.pieces().len().checked_sub(1);
 
     let put = |buf: &mut Buffer, i: usize, j: usize, text: [char; 2], style: Style| {
         if i < v.top || j < v.left || i >= v.top + rows || j >= v.left + cols {
@@ -132,7 +161,7 @@ fn draw_board(frame: &mut Frame, app: &mut App, area: Rect) {
     // Tiles, as seen from above.
     for i in v.top..(v.top + rows).min(HEIGHT) {
         for j in v.left..(v.left + cols).min(WIDTH) {
-            match game.top.get(i, j) {
+            match top.get(i, j) {
                 None => put(buf, i, j, ['·', ' '], Style::new().fg(theme::EMPTY_DOT)),
                 Some(t) => {
                     let bg = match app.view {
@@ -140,7 +169,7 @@ fn draw_board(frame: &mut Frame, app: &mut App, area: Rect) {
                         View::Height => theme::level(t.layer),
                     };
                     let mut style = Style::new().bg(bg).fg(theme::text_on(bg));
-                    let text = if game.label_cell(t.piece) == (i, j) {
+                    let text = if label_cell(board, t.piece) == (i, j) {
                         if Some(t.piece) == last {
                             style = style.add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
                         }
@@ -152,6 +181,10 @@ fn draw_board(frame: &mut Frame, app: &mut App, area: Rect) {
                 }
             }
         }
+    }
+
+    if app.review.is_some() {
+        return;
     }
 
     // The engine's suggestion being browsed, if asked for.
@@ -463,9 +496,110 @@ fn draw_hint(frame: &mut Frame, app: &App, area: Rect) {
 // ----------------------------------------------------------------------------
 // Key bar and overlays
 
+/// The two plays side by side at the step being reviewed.
+fn draw_review_panel(frame: &mut Frame, app: &App, r: &Review, area: Rect) {
+    let tiles = &app.game.tiles;
+    let yours: Vec<Move> = app.game.board.pieces().iter().map(|p| p.mv).collect();
+    let best = app.analysis.as_ref().and_then(|a| a.best.as_ref());
+    let k = r.step - 1;
+    let value = tiles[k];
+    let score_after = |moves: &[Move]| -> i64 {
+        tiles
+            .iter()
+            .zip(moves)
+            .take(r.step)
+            .map(|(&v, m)| v as i64 * m.layer as i64)
+            .sum()
+    };
+    let describe = |m: Move| {
+        let pts = value as usize * m.layer;
+        if pts > 0 {
+            format!("level {}  +{pts}", m.layer)
+        } else {
+            format!("level {}", m.layer)
+        }
+    };
+    let row = |label: &str, play: Play, mv: Option<Move>, total: Option<i64>| {
+        let style = if r.play == play {
+            Style::new().bold().fg(theme::ACCENT)
+        } else {
+            Style::new()
+        };
+        Line::from(vec![
+            Span::styled(
+                format!("{} {label:<5}", if r.play == play { "▸" } else { " " }),
+                style,
+            ),
+            Span::styled(format!("{:<13}", mv.map_or("…".into(), describe)), style),
+            Span::styled(
+                total.map_or(String::new(), |t| format!("score {t}")),
+                Style::new().fg(theme::MUTED),
+            ),
+        ])
+    };
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled(
+                format!("Tile {} of {TILES}: ", r.step),
+                Style::new().fg(theme::MUTED),
+            ),
+            Span::styled(
+                format!("a {value}"),
+                Style::new().bold().fg(theme::value(value)),
+            ),
+        ]),
+        Line::raw(""),
+        row(
+            "You",
+            Play::Yours,
+            Some(yours[k]),
+            Some(score_after(&yours)),
+        ),
+        row(
+            "Best",
+            Play::Best,
+            best.map(|b| b.moves[k]),
+            best.map(|b| score_after(&b.moves)),
+        ),
+        Line::raw(""),
+    ];
+    let final_line = |label: &str, score: Option<i64>| {
+        Line::from(vec![
+            Span::raw(format!("  {label:<11}")),
+            Span::styled(
+                score.map_or("…".into(), |s| s.to_string()),
+                Style::new().bold(),
+            ),
+        ])
+    };
+    lines.push(Line::styled("Final scores", Style::new().fg(theme::MUTED)));
+    lines.push(final_line("You", Some(app.game.board.score())));
+    lines.push(final_line("Best found", best.map(|b| b.score)));
+    lines.push(final_line(
+        "Engine",
+        app.rival.as_ref().and_then(|r| r.score),
+    ));
+    if app.analysis.as_ref().is_some_and(|a| !a.finished()) {
+        lines.push(Line::raw(""));
+        lines.push(Line::styled(
+            "Still searching for a better play…",
+            Style::new().fg(theme::MUTED),
+        ));
+    }
+    frame.render_widget(Paragraph::new(lines).block(block("Review")), area);
+}
+
 fn draw_keys(frame: &mut Frame, app: &App, area: Rect) {
-    let keys: &[(&str, &str)] = if app.game.is_over() {
+    let keys: &[(&str, &str)] = if app.review.is_some() {
         &[
+            ("←→", "step"),
+            ("home/end", "first/last"),
+            ("tab", "your game / best play"),
+            ("esc", "back"),
+        ]
+    } else if app.game.is_over() {
+        &[
+            ("b", "review best play"),
             ("n", "new game"),
             ("r", "replay tiles"),
             ("esc", "show/hide summary"),
@@ -552,9 +686,36 @@ fn draw_game_over(frame: &mut Frame, app: &App, area: Rect) {
         ),
     };
     lines.push(rival);
+    let analysis = app.analysis.as_ref();
+    let best = match analysis.and_then(|a| a.best.as_ref()) {
+        Some(b) => {
+            let searching = analysis.is_some_and(|a| !a.finished());
+            Line::from(vec![
+                Span::raw("Best play found on these tiles: "),
+                Span::styled(b.score.to_string(), Style::new().bold().fg(theme::HINT)),
+                Span::styled(
+                    if searching {
+                        "  (still searching…)"
+                    } else {
+                        ""
+                    },
+                    Style::new().fg(theme::MUTED),
+                ),
+            ])
+        }
+        None => Line::styled(
+            "Searching for the best play of these tiles…",
+            Style::new().fg(theme::MUTED),
+        ),
+    };
+    lines.push(best);
     lines.push(Line::raw(""));
     lines.push(Line::styled(
-        "n new game · r replay these tiles · esc view board · q quit",
+        "b review the best play · n new game · r replay these tiles",
+        Style::new().fg(theme::MUTED),
+    ));
+    lines.push(Line::styled(
+        "esc view board · q quit",
         Style::new().fg(theme::MUTED),
     ));
     let popup = centered(area, 60, lines.len() as u16 + 2);
@@ -604,6 +765,10 @@ fn draw_help(frame: &mut Frame, area: Rect) {
         Line::from(vec![
             key("mouse"),
             Span::raw("hover to aim, click to place, scroll to rotate"),
+        ]),
+        Line::from(vec![
+            key("b"),
+            Span::raw("after a game: step through the best play found"),
         ]),
         Line::from(vec![key("n / q"), Span::raw("new game / quit")]),
         Line::raw(""),
@@ -667,6 +832,44 @@ mod tests {
         app.help = true;
         let s = screen(&mut app, 100, 32);
         assert!(s.contains("How to play"), "{s}");
+    }
+
+    #[test]
+    fn renders_the_summary_and_the_review() {
+        let mut app = App::new(3, None, 16);
+        app.analysis_stages = &[(1, 2)];
+        while !app.game.is_over() {
+            let v = app.game.current().unwrap();
+            let mv = app.game.board.find_valid_moves(v)[0];
+            app.game.jump_to(mv);
+            app.game.place().unwrap();
+        }
+        app.analysis = Some(crate::analysis::Analysis::start(
+            app.game.tiles.clone(),
+            &[(1, 2)],
+        ));
+        let start = std::time::Instant::now();
+        while !app.analysis.as_ref().unwrap().finished() {
+            app.tick();
+            assert!(start.elapsed().as_secs() < 60);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        app.tick();
+        let s = screen(&mut app, 110, 34);
+        assert!(s.contains("Best play found on these tiles"), "{s}");
+        app.on_key(ratatui::crossterm::event::KeyEvent::from(
+            ratatui::crossterm::event::KeyCode::Char('b'),
+        ));
+        let s = screen(&mut app, 110, 34);
+        for text in [
+            "Best play found · tile 20 of 20",
+            "Review",
+            "Final scores",
+            "Best found",
+            "your game / best play",
+        ] {
+            assert!(s.contains(text), "missing {text:?} in\n{s}");
+        }
     }
 
     #[test]
