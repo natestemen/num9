@@ -31,6 +31,8 @@ fn mix(mut x: u64) -> u64 {
     x ^ (x >> 31)
 }
 
+type Turn = fn((i64, i64)) -> (i64, i64);
+
 /// The same key for every translation and quarter turn of the stack.
 fn key(board: &Board) -> u128 {
     let tiles: Vec<(u64, Vec<(i64, i64)>)> = board
@@ -44,7 +46,7 @@ fn key(board: &Board) -> u128 {
             ((p.mv.layer as u64) << 8 | p.value as u64, cells)
         })
         .collect();
-    let turns: [fn((i64, i64)) -> (i64, i64); 4] = [
+    let turns: [Turn; 4] = [
         |(r, c)| (r, c),
         |(r, c)| (c, -r),
         |(r, c)| (-r, -c),
@@ -154,7 +156,7 @@ impl Solver {
         self.memo.insert(k, node);
         let placed = board.pieces().len();
         self.found[placed] += 1;
-        if self.memo.len() % 1_000_000 == 0 {
+        if self.memo.len().is_multiple_of(1_000_000) {
             eprintln!(
                 "[{:.0}s] {} positions {:?}",
                 self.start.elapsed().as_secs_f64(),
