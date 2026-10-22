@@ -287,12 +287,26 @@ impl Game {
         out
     }
 
-    /// Cell where a piece's label is drawn: its first tile in reading order.
+    /// Cell where a piece's label is drawn (see [`label_cell`]).
     pub fn label_cell(&self, piece: usize) -> (usize, usize) {
-        let p = self.board.pieces()[piece];
-        let (r, c) = shape(p.value, p.mv.rot).cells().next().unwrap();
-        (p.mv.i + r, p.mv.j + c)
+        label_cell(&self.board, piece)
     }
+}
+
+/// Cell where a piece's label is drawn: its first tile in reading order.
+pub fn label_cell(board: &Board, piece: usize) -> (usize, usize) {
+    let p = board.pieces()[piece];
+    let (r, c) = shape(p.value, p.mv.rot).cells().next().unwrap();
+    (p.mv.i + r, p.mv.j + c)
+}
+
+/// The board after playing the first `steps` of `moves` for `tiles`.
+pub fn replay(tiles: &[u8], moves: &[Move], steps: usize) -> Board {
+    let mut board = Board::new();
+    for (&v, &mv) in tiles.iter().zip(moves).take(steps) {
+        board.place(v, mv).expect("a recorded legal play");
+    }
+    board
 }
 
 #[cfg(test)]
