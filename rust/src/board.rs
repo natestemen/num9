@@ -9,7 +9,7 @@ use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, Shl, Shr};
 
 use crate::piece::{shape, Shape};
 
-pub const DEPTH: usize = 6;
+pub const DEPTH: usize = 10;
 pub const HEIGHT: usize = 160;
 pub const WIDTH: usize = 120;
 const COL_MASK: u128 = (1u128 << WIDTH) - 1;
