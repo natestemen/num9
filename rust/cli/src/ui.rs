@@ -120,10 +120,19 @@ fn frame_review(r: &Review, rows: usize, cols: usize) -> Viewport {
 
 fn draw_board(frame: &mut Frame, app: &mut App, area: Rect) {
     let title = match (&app.review, app.view) {
-        (Some(r), _) => match r.play {
-            Play::Yours => format!("Your game · tile {} of {TILES}", r.step),
-            Play::Best => format!("Best play found · tile {} of {TILES}", r.step),
-        },
+        (Some(r), view) => {
+            let which = match (r.play, &app.replay) {
+                (Play::Yours, Some(name)) => name.clone(),
+                (Play::Yours, None) => "Your game".to_string(),
+                (Play::Best, _) => "Best play found".to_string(),
+            };
+            let map = if view == View::Height {
+                " · height map"
+            } else {
+                ""
+            };
+            format!("{which} · tile {} of {TILES}{map}", r.step)
+        }
         (None, View::Tiles) => "Board".to_string(),
         (None, View::Height) => "Board · height map".to_string(),
     };
@@ -550,35 +559,69 @@ fn draw_review_panel(frame: &mut Frame, app: &App, r: &Review, area: Rect) {
         ]),
         Line::raw(""),
         row(
-            "You",
+            if app.replay.is_some() { "Play" } else { "You" },
             Play::Yours,
             Some(yours[k]),
             Some(score_after(&yours)),
         ),
-        row(
+    ];
+    if app.analysis.is_some() {
+        lines.push(row(
             "Best",
             Play::Best,
             best.map(|b| b.moves[k]),
             best.map(|b| score_after(&b.moves)),
-        ),
-        Line::raw(""),
-    ];
+        ));
+    }
+    lines.push(Line::raw(""));
     let final_line = |label: &str, score: Option<i64>| {
         Line::from(vec![
-            Span::raw(format!("  {label:<11}")),
+            Span::raw(format!("  {label:<12}")),
             Span::styled(
                 score.map_or("…".into(), |s| s.to_string()),
                 Style::new().bold(),
             ),
         ])
     };
-    lines.push(Line::styled("Final scores", Style::new().fg(theme::MUTED)));
-    lines.push(final_line("You", Some(app.game.board.score())));
-    lines.push(final_line("Best found", best.map(|b| b.score)));
-    lines.push(final_line(
-        "Engine",
-        app.rival.as_ref().and_then(|r| r.score),
-    ));
+    if app.replay.is_some() {
+        lines.push(final_line("Final score", Some(app.game.board.score())));
+    } else {
+        lines.push(Line::styled("Final scores", Style::new().fg(theme::MUTED)));
+        lines.push(final_line("You", Some(app.game.board.score())));
+        if app.analysis.is_some() {
+            lines.push(final_line("Best found", best.map(|b| b.score)));
+        }
+        if let Some(r) = &app.rival {
+            lines.push(final_line("Engine", r.score));
+        }
+    }
+    // What's on each level so far.
+    lines.push(Line::raw(""));
+    let mut per_level = [(0usize, 0i64); num9_core::DEPTH];
+    for p in r.board.pieces() {
+        per_level[p.mv.layer].0 += 1;
+        per_level[p.mv.layer].1 += p.value as i64 * p.mv.layer as i64;
+    }
+    for (l, &(n, pts)) in per_level
+        .iter()
+        .enumerate()
+        .rev()
+        .filter(|(_, (n, _))| *n > 0)
+    {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  Level {l} "),
+                Style::new().fg(theme::level(l)).bold(),
+            ),
+            Span::styled(
+                format!(
+                    "{n:>2} tile{}  {pts:>3} pts",
+                    if n == 1 { " " } else { "s" }
+                ),
+                Style::new().fg(theme::MUTED),
+            ),
+        ]));
+    }
     if app.analysis.as_ref().is_some_and(|a| !a.finished()) {
         lines.push(Line::raw(""));
         lines.push(Line::styled(
@@ -590,12 +633,27 @@ fn draw_review_panel(frame: &mut Frame, app: &App, r: &Review, area: Rect) {
 }
 
 fn draw_keys(frame: &mut Frame, app: &App, area: Rect) {
-    let keys: &[(&str, &str)] = if app.review.is_some() {
+    let keys: &[(&str, &str)] = if app.review.is_some() && app.analysis.is_none() {
+        &[
+            ("←→", "step"),
+            ("home/end", "first/last"),
+            ("tab", "tiles / height map"),
+            ("esc", "summary"),
+            ("q", "quit"),
+        ]
+    } else if app.review.is_some() {
         &[
             ("←→", "step"),
             ("home/end", "first/last"),
             ("tab", "your game / best play"),
+            ("v", "view"),
             ("esc", "back"),
+        ]
+    } else if app.game.is_over() && app.replay.is_some() {
+        &[
+            ("b", "step through it"),
+            ("esc", "show/hide summary"),
+            ("q", "quit"),
         ]
     } else if app.game.is_over() {
         &[
@@ -685,6 +743,21 @@ fn draw_game_over(frame: &mut Frame, app: &App, area: Rect) {
             Style::new().fg(theme::MUTED),
         ),
     };
+    if let Some(name) = &app.replay {
+        lines.push(Line::styled(
+            format!("Replay of {name}"),
+            Style::new().fg(theme::MUTED),
+        ));
+        lines.push(Line::raw(""));
+        lines.push(Line::styled(
+            "b step through it · q quit",
+            Style::new().fg(theme::MUTED),
+        ));
+        let popup = centered(area, 60, lines.len() as u16 + 2);
+        frame.render_widget(Clear, popup);
+        frame.render_widget(Paragraph::new(lines).block(block("Replay")), popup);
+        return;
+    }
     lines.push(rival);
     let analysis = app.analysis.as_ref();
     let best = match analysis.and_then(|a| a.best.as_ref()) {

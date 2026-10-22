@@ -95,6 +95,9 @@ pub struct App {
     /// Its stages (see [`analysis::STAGES`]).
     pub analysis_stages: &'static [(usize, usize)],
     pub review: Option<Review>,
+    /// Set when showing a recorded play rather than a game played here: a
+    /// name for it (e.g. the file it came from).
+    pub replay: Option<String>,
     pub message: Option<Message>,
     /// A destructive key (quit / new game) waiting for confirmation.
     pub confirm: Option<KeyCode>,
@@ -121,6 +124,7 @@ impl App {
             analysis: None,
             analysis_stages: analysis::STAGES,
             review: None,
+            replay: None,
             message: None,
             confirm: None,
             quit: false,
@@ -296,6 +300,28 @@ impl App {
         self.analysis_stages = stages;
     }
 
+    /// Show a recorded play (tile values and moves in order), stepping
+    /// through it from the first tile. Fails if a move breaks the rules.
+    pub fn replay(
+        name: String,
+        steps: &[(u8, num9_core::Move)],
+        hint_rollouts: usize,
+    ) -> Result<App, String> {
+        let game = Game::from_play(steps)?;
+        let mut app = App::new(0, Some(game.tiles.clone()), hint_rollouts);
+        app.game = game;
+        app.replay = Some(name);
+        app.show_review(Play::Yours, 1);
+        Ok(app)
+    }
+
+    fn toggle_view(&mut self) {
+        self.view = match self.view {
+            View::Tiles => View::Height,
+            View::Height => View::Tiles,
+        };
+    }
+
     /// The moves of a finished play, if available.
     fn moves_of(&self, play: Play) -> Option<Vec<num9_core::Move>> {
         match play {
@@ -344,6 +370,8 @@ impl App {
             KeyCode::Right | KeyCode::Char('d') => self.show_review(play, step + 1),
             KeyCode::Home => self.show_review(play, 1),
             KeyCode::End => self.show_review(play, TILES),
+            // With no other play to compare, tab switches the view instead.
+            KeyCode::Tab if self.moves_of(Play::Best).is_none() => self.toggle_view(),
             KeyCode::Tab | KeyCode::Char('b') => {
                 let other = if play == Play::Yours {
                     Play::Best
@@ -352,6 +380,7 @@ impl App {
                 };
                 self.show_review(other, step);
             }
+            KeyCode::Char('v') => self.toggle_view(),
             KeyCode::Esc | KeyCode::Char('q') => self.review = None,
             KeyCode::Char('?') => self.help = true,
             _ => {}
@@ -431,12 +460,7 @@ impl App {
             KeyCode::Char('h') => self.ask_hint(),
             KeyCode::Char('g') => self.jump_to_hint(None),
             KeyCode::Char(c @ '1'..='9') => self.jump_to_hint(Some(c as usize - '1' as usize)),
-            KeyCode::Tab | KeyCode::Char('v') => {
-                self.view = match self.view {
-                    View::Tiles => View::Height,
-                    View::Height => View::Tiles,
-                };
-            }
+            KeyCode::Tab | KeyCode::Char('v') => self.toggle_view(),
             KeyCode::Char('?') => self.help = true,
             KeyCode::Esc => self.show_hint = false,
             KeyCode::Char(c @ ('q' | 'n')) => {
@@ -632,6 +656,37 @@ mod tests {
         // Undoing the last tile abandons the analysis.
         a.on_key(key(KeyCode::Char('u')));
         assert!(a.analysis.is_none() && !a.game.is_over());
+    }
+
+    #[test]
+    fn a_recorded_play_opens_in_review_and_steps_through() {
+        let mut a = app();
+        while !a.game.is_over() {
+            a.game.place().unwrap();
+        }
+        let steps: Vec<(u8, num9_core::Move)> = a
+            .game
+            .board
+            .pieces()
+            .iter()
+            .map(|p| (p.value, p.mv))
+            .collect();
+        let mut r = App::replay("test".into(), &steps, 16).unwrap();
+        assert!(
+            r.analysis.is_none() && r.rival.is_none(),
+            "nothing to compute for a replay"
+        );
+        assert_eq!(r.review.as_ref().unwrap().step, 1);
+        r.on_key(key(KeyCode::End));
+        let rv = r.review.as_ref().unwrap();
+        assert_eq!((rv.step, rv.board.score()), (TILES, a.game.board.score()));
+        r.on_key(key(KeyCode::Tab));
+        assert_eq!(
+            r.view,
+            View::Height,
+            "tab switches the view when there's one play"
+        );
+        assert_eq!(r.review.as_ref().unwrap().play, Play::Yours);
     }
 
     #[test]

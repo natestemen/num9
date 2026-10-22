@@ -35,6 +35,11 @@ struct Args {
     /// Leave the mouse alone (lets the terminal select text).
     #[arg(long)]
     no_mouse: bool,
+
+    /// Step through a recorded play instead of playing, e.g.
+    /// records/free-order-236.txt (moves written as value@level:row:col:rotation).
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["seed", "tiles"])]
+    replay: Option<std::path::PathBuf>,
 }
 
 fn main() -> io::Result<()> {
@@ -53,7 +58,27 @@ fn main() -> io::Result<()> {
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos() as u64)
     });
-    let mut app = App::new(seed, args.tiles, args.hint_rollouts as usize);
+    let mut app = match &args.replay {
+        None => App::new(seed, args.tiles, args.hint_rollouts as usize),
+        Some(path) => {
+            let loaded = std::fs::read_to_string(path)
+                .map_err(|e| e.to_string())
+                .and_then(|text| num9_cli::game::parse_play(&text))
+                .and_then(|steps| {
+                    let name = path
+                        .file_stem()
+                        .map_or("replay".into(), |s| s.to_string_lossy().into_owned());
+                    App::replay(name, &steps, args.hint_rollouts as usize)
+                });
+            match loaded {
+                Ok(app) => app,
+                Err(e) => {
+                    eprintln!("error: can't replay {}: {e}", path.display());
+                    std::process::exit(2);
+                }
+            }
+        }
+    };
 
     let mouse = !args.no_mouse;
     if mouse {
