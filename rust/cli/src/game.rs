@@ -144,6 +144,39 @@ impl Game {
         }
     }
 
+    /// A finished game from a recorded play (tile values and moves in
+    /// order), checking every move against the rules.
+    pub fn from_play(steps: &[(u8, Move)]) -> Result<Game, String> {
+        let Some(&(first, first_move)) = steps.first() else {
+            return Err("the play has no moves".into());
+        };
+        if first_move != Board::center_move() {
+            return Err(format!(
+                "the first tile must be at {}:{}:{}:0 (the middle, unrotated)",
+                0,
+                Board::center_move().i,
+                Board::center_move().j
+            ));
+        }
+        let mut game = Game::new(steps.iter().map(|s| s.0).collect());
+        debug_assert_eq!(game.board.pieces()[0].value, first);
+        for (k, &(value, mv)) in steps.iter().enumerate().skip(1) {
+            if !game.board.is_valid_move(value, mv) {
+                return Err(format!(
+                    "move {} ({value} at {}:{}:{}:{}) breaks the rules",
+                    k + 1,
+                    mv.layer,
+                    mv.i,
+                    mv.j,
+                    mv.rot
+                ));
+            }
+            game.board.place(value, mv).map_err(|e| e.to_string())?;
+        }
+        game.top = TopView::new(&game.board);
+        Ok(game)
+    }
+
     /// Tiles placed so far.
     pub fn placed(&self) -> usize {
         self.board.pieces().len()
@@ -300,6 +333,32 @@ pub fn label_cell(board: &Board, piece: usize) -> (usize, usize) {
     (p.mv.i + r, p.mv.j + c)
 }
 
+/// Read a recorded play: every `value@level:row:col:rotation` token in
+/// `text`, in order (the format the `tower` and `maxscore` commands write).
+pub fn parse_play(text: &str) -> Result<Vec<(u8, Move)>, String> {
+    let mut steps = Vec::new();
+    // Moves start with a digit; other text (headers like "value@level:...")
+    // is ignored.
+    let looks_like_move = |t: &&str| t.contains('@') && t.starts_with(|c: char| c.is_ascii_digit());
+    for token in text.split_whitespace().filter(looks_like_move) {
+        let bad = || format!("can't read move {token:?} (expected value@level:row:col:rotation)");
+        let (value, rest) = token.split_once('@').ok_or_else(bad)?;
+        let nums: Vec<usize> = rest
+            .split(':')
+            .map(|n| n.parse().map_err(|_| bad()))
+            .collect::<Result<_, _>>()?;
+        let value: u8 = value.parse().map_err(|_| bad())?;
+        if nums.len() != 4 || value > 9 || nums[3] > 3 {
+            return Err(bad());
+        }
+        steps.push((value, Move::new(nums[0], nums[1], nums[2], nums[3])));
+    }
+    if steps.is_empty() {
+        return Err("no moves found (expected value@level:row:col:rotation tokens)".into());
+    }
+    Ok(steps)
+}
+
 /// The board after playing the first `steps` of `moves` for `tiles`.
 pub fn replay(tiles: &[u8], moves: &[Move], steps: usize) -> Board {
     let mut board = Board::new();
@@ -324,6 +383,41 @@ mod tests {
             assert_eq!(g.preview().unwrap().legal, Ok(()));
             g.place().unwrap();
         }
+    }
+
+    #[test]
+    fn plays_are_read_and_checked() {
+        // Record a real game, write it out, read it back.
+        let mut g = Game::new(standard_tiles());
+        while !g.is_over() {
+            g.place().unwrap();
+        }
+        let text: String = g
+            .board
+            .pieces()
+            .iter()
+            .map(|p| {
+                format!(
+                    "{}@{}:{}:{}:{} ",
+                    p.value, p.mv.layer, p.mv.i, p.mv.j, p.mv.rot
+                )
+            })
+            .collect();
+        let steps = parse_play(&format!(
+            "score {}\nmoves (value@layer:row:col:rotation) {text}",
+            g.board.score()
+        ))
+        .unwrap();
+        let replayed = Game::from_play(&steps).unwrap();
+        assert!(replayed.is_over());
+        assert_eq!(replayed.board.pieces(), g.board.pieces());
+        // A broken move is reported.
+        let mut bad = steps.clone();
+        bad[5].1.layer += 1;
+        let err = Game::from_play(&bad).err().expect("an error");
+        assert!(err.contains("move 6"), "{err}");
+        assert!(parse_play("nothing here").is_err());
+        assert!(parse_play("3@0:1:2").is_err());
     }
 
     #[test]
