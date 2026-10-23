@@ -742,21 +742,34 @@ button {
     display: none; /* the buttons below do the same */
   }
 
-  /* Ten card buttons in one row, big enough to tap. */
+  /* The card buttons in two rows of five, big enough to tap easily. */
   .cards {
-    flex-wrap: nowrap;
-    gap: 0.3rem;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.4rem;
   }
 
   .cards-label {
     display: none;
   }
 
+  .cards .your-score {
+    grid-column: 1 / -1;
+  }
+
   .cards button {
-    flex: 1 1 0;
     min-width: 0;
-    min-height: 3.2rem;
+    min-height: 3.6rem;
     padding: 0.2rem 0;
+    border-radius: 8px;
+  }
+
+  .cards button b {
+    font-size: 1.9em;
+  }
+
+  .cards button small {
+    font-size: 0.95em;
   }
 
   .decks {
