@@ -7,6 +7,7 @@ import { Game, TopView, geometry, levels, sameMove, score, cells } from "./game.
 import { BoardView, extent } from "./board.js";
 import { Hint } from "./hint.js";
 import { Background } from "./workers.js";
+import { Coach, GameAnalysis, plural } from "./coach.js";
 import * as theme from "./theme.js";
 import * as ui from "./ui.js";
 
@@ -65,6 +66,24 @@ export class PlayApp {
     this.message = null;
     this.confirm = null;
     this.view.fresh = true;
+    this.stopCoach();
+  }
+
+  /// Drop the move-by-move analysis (the game changed).
+  stopCoach() {
+    this.gameAnalysis?.stop();
+    this.gameAnalysis = null;
+    this.coach = null;
+    this.coachOn = false;
+  }
+
+  /// Re-draw at most once a frame (analysis results stream in fast).
+  renderSoon() {
+    if (this.pendingRender) return;
+    this.pendingRender = requestAnimationFrame(() => {
+      this.pendingRender = null;
+      this.render();
+    });
   }
 
   loadReplay({ name, steps }) {
@@ -80,6 +99,7 @@ export class PlayApp {
   stopWork() {
     this.hint?.stop();
     this.background.stop();
+    this.stopCoach();
   }
 
   say(text, tone = "info") {
@@ -134,6 +154,10 @@ export class PlayApp {
   }
 
   place() {
+    if (this.coachOn && this.coach.practice) {
+      this.coach.tryMove();
+      return;
+    }
     const r = this.game.place();
     if (r.problem) {
       this.say(r.problem, "bad");
@@ -151,6 +175,10 @@ export class PlayApp {
   /// The engine plays the same tiles, then searches for their best play.
   async gameOver() {
     const tiles = this.game.tiles;
+    if (!this.replayName) {
+      // Grade every move, on the worker pool, while the engine plays below.
+      this.gameAnalysis = new GameAnalysis(this.pool, this.engine, tiles, this.game.pieces, () => this.renderSoon());
+    }
     this.rival = { score: null };
     this.analysis = { best: null, stagesDone: 0, stages: STAGES.length };
     try {
@@ -187,6 +215,7 @@ export class PlayApp {
   undo() {
     if (this.game.undo()) {
       this.background.stop();
+      this.stopCoach();
       this.rival = null;
       this.analysis = null;
       this.review = null;
@@ -273,6 +302,7 @@ export class PlayApp {
     const key = e.key;
     let used = true;
     if (key === "info") this.infoOpen = !this.infoOpen;
+    else if (this.coachOn) used = this.coach.onKey(e);
     else if (this.review) used = this.onReviewKey(key);
     else if (this.game.isOver()) used = this.onOverKey(key);
     else used = this.onPlayKey(e, pending);
@@ -280,8 +310,20 @@ export class PlayApp {
     return used;
   }
 
+  /// Go through the game move by move with the engine's verdicts.
+  openCoach() {
+    if (!this.gameAnalysis) return;
+    this.coach ??= new Coach(this);
+    this.coachOn = true;
+    this.review = null;
+    this.coach.open();
+  }
+
   onOverKey(key) {
     switch (key) {
+      case "a":
+        this.openCoach();
+        break;
       case "b":
         this.showReview(this.movesOf("best") ? "best" : "yours", this.game.tiles.length);
         break;
@@ -499,7 +541,11 @@ export class PlayApp {
     this.s.panel.addEventListener("click", (e) => {
       const send = e.target.closest("[data-send]");
       const play = e.target.closest("[data-play]");
-      if (send) this.onKey({ key: send.dataset.send, preventDefault() {} });
+      const step = e.target.closest("[data-step]");
+      if (step && this.coachOn) {
+        this.coach.go(Number(step.dataset.step));
+        this.render();
+      } else if (send) this.onKey({ key: send.dataset.send, preventDefault() {} });
       else if (play && this.review && this.movesOf(play.dataset.play)) {
         this.showReview(play.dataset.play, this.review.step);
         this.render();
@@ -617,7 +663,14 @@ export class PlayApp {
     this.view.resize();
     this.drawBoard();
     this.drawUnspot();
-    this.s.panel.innerHTML = `<button class="sheet-close" data-send="info">Close ✕</button>` + (this.review ? this.reviewPanel() : this.panel());
+    const body = this.coachOn
+      ? this.coach.practice
+        ? this.coach.practicePanel()
+        : this.coach.panel()
+      : this.review
+        ? this.reviewPanel()
+        : this.panel();
+    this.s.panel.innerHTML = `<button class="sheet-close" data-send="info">Close ✕</button>` + body;
     this.s.panel.classList.toggle("open", !!this.infoOpen);
     this.s.status.innerHTML = this.statusHtml();
     ui.touchBar(this.s.touchbar, this.touchButtons(), (e) => this.onKey(e));
@@ -634,6 +687,7 @@ export class PlayApp {
   }
 
   statusHtml() {
+    if (this.coachOn) return this.coach.statusHtml();
     const g = this.game;
     if (this.review) {
       const r = this.review;
@@ -689,6 +743,7 @@ export class PlayApp {
 
   /// Buttons for touch screens.
   touchButtons() {
+    if (this.coachOn) return this.coach.touchButtons();
     const info = ["Info", "info"];
     if (this.review) {
       const other = this.movesOf("best") ? ["Switch", "Tab"] : ["Map", "Tab"];
@@ -696,13 +751,14 @@ export class PlayApp {
     }
     if (this.game.isOver()) {
       if (this.replayName) return [["Step through", "b", "primary"], info];
-      return [["Review", "b", "primary"], ["New", "n"], ["Again", "r"], ["Board", "Escape"], ["Undo", "u"], info];
+      return [["Analysis", "a", "primary"], ["Best", "b"], ["New", "n"], ["Again", "r"], ["Board", "Escape"], info];
     }
     const hint = this.showHint && this.currentHint() ? ["Next", "g"] : ["Hint", "h"];
     return [["↺", "R"], ["↻", " "], hint, ["Place", "Enter", "primary"], ["Undo", "u"], ["New", "n"], info];
   }
 
   drawBoard() {
+    if (this.coachOn && !this.coach.practice) return this.coach.drawBoard();
     const g = this.game;
     const n = g.tiles.length;
     if (this.review) {
@@ -824,6 +880,7 @@ export class PlayApp {
   }
 
   keys() {
+    if (this.coachOn) return this.coach.keys();
     const g = this.game;
     if (this.review && !this.analysis) {
       return [
@@ -850,6 +907,7 @@ export class PlayApp {
     }
     if (g.isOver()) {
       return [
+        ["a", "game analysis", "a"],
         ["b", "review best play", "b"],
         ["n", "new game", "n"],
         ["r", "replay tiles", "r"],
@@ -881,7 +939,7 @@ export class PlayApp {
 
   drawPopup() {
     const g = this.game;
-    const show = g.isOver() && !this.hideSummary && !this.review;
+    const show = g.isOver() && !this.hideSummary && !this.review && !this.coachOn;
     this.s.popup.hidden = !show;
     if (show) this.s.popup.innerHTML = this.summary();
   }
@@ -909,8 +967,20 @@ export class PlayApp {
       const searching = this.analysis.stagesDone < this.analysis.stages;
       out += `<div>Best play found on these tiles: ${ui.bold(best.score, theme.HINT)}${searching ? ui.muted("  (still searching…)") : ""}</div>`;
     } else out += `<div>${ui.muted("Searching for the best play of these tiles…")}</div>`;
+    const a = this.gameAnalysis;
+    if (a) {
+      out += `<div class="gap"></div>`;
+      if (a.finished()) {
+        const sum = a.summary();
+        const worst = ["blunder", "mistake", "inaccuracy"]
+          .filter((id) => sum.counts[id])
+          .map((id) => plural(sum.counts[id], id));
+        out += `<div>Your accuracy: ${ui.bold(`${sum.accuracy.toFixed(0)}%`, theme.ACCENT)}  ${ui.muted(worst.length ? worst.join(", ") : "no mistakes!")}</div>`;
+      } else out += `<div>${ui.muted(`Analysing your moves… ${Math.round(a.progress() * 100)}%`)}</div>`;
+    }
     out += `<div class="gap"></div>`;
     out += actions([
+      ...(a ? [["a", "game analysis"]] : []),
       ["b", "review the best play"],
       ["n", "new game"],
       ["r", "replay these tiles"],
