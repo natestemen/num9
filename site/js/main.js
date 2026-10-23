@@ -7,8 +7,9 @@ import { Pool } from "./workers.js";
 import { PlayApp } from "./play.js";
 import { PuzzleApp, DECKS } from "./puzzles.js";
 import { RecordsApp } from "./records.js";
+import { CompanionApp } from "./companion.js";
 
-const screens = ["play", "puzzles", "records", "about"];
+const screens = ["play", "companion", "puzzles", "records", "about"];
 const apps = {};
 let active = null;
 let engine;
@@ -33,6 +34,9 @@ async function create(name, arg) {
       onHelp: openHelp,
       onDeal: (s) => history.replaceState(null, "", `#play/${s}`),
     });
+  }
+  if (name === "companion") {
+    return new CompanionApp(section, engine, pool, { onHelp: openHelp });
   }
   if (name === "puzzles") {
     const picker = section.querySelector(".decks");
@@ -69,6 +73,7 @@ async function show() {
 }
 
 document.addEventListener("keydown", (e) => {
+  if (e.target.closest?.("input, textarea, select")) return;
   if (e.altKey || (e.metaKey && e.key !== "z") || (e.ctrlKey && e.key !== "z")) return;
   if (!help.hidden) {
     help.hidden = true;

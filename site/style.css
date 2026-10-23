@@ -350,6 +350,73 @@ section[hidden] {
   gap: 0.4rem 1.6ch;
 }
 
+/* Companion: the cards to enter. */
+.cards {
+  display: flex;
+  align-items: center;
+  gap: 0.5ch;
+  flex-wrap: wrap;
+}
+
+.cards-label {
+  color: var(--muted);
+  margin-right: 1ch;
+}
+
+.cards button {
+  font: inherit;
+  min-width: 3.4em;
+  padding: 0.2rem 0.6ch 0.15rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+
+.cards button b {
+  font-size: 1.35em;
+}
+
+.cards button small {
+  font-size: 0.75em;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+}
+
+.cards button:disabled {
+  opacity: 0.18;
+  cursor: default;
+}
+
+.cards button:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+.your-score {
+  display: flex;
+  align-items: center;
+  gap: 1.5ch;
+  font-weight: 700;
+}
+
+.your-score input {
+  font: inherit;
+  font-size: 1.2em;
+  width: 7ch;
+  padding: 0.25rem 0.8ch;
+  color: var(--fg);
+  background: rgb(30, 33, 41);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+
+.panel .wrap {
+  white-space: normal;
+}
+
 /* Puzzles and records. */
 .decks {
   display: flex;
@@ -555,6 +622,10 @@ button {
     display: none;
   }
 
+  nav a {
+    padding: 0.1rem 0.7ch;
+  }
+
   nav {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -671,6 +742,23 @@ button {
     display: none; /* the buttons below do the same */
   }
 
+  /* Ten card buttons in one row, big enough to tap. */
+  .cards {
+    flex-wrap: nowrap;
+    gap: 0.3rem;
+  }
+
+  .cards-label {
+    display: none;
+  }
+
+  .cards button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 3.2rem;
+    padding: 0.2rem 0;
+  }
+
   .decks {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -696,5 +784,12 @@ button {
 
   .modal dl {
     grid-template-columns: 11ch 1fr;
+  }
+}
+
+/* The smallest phones: the tabs need the whole header. */
+@media (max-width: 480px) {
+  .brand {
+    display: none;
   }
 }

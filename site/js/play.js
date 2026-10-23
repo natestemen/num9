@@ -153,12 +153,22 @@ export class PlayApp {
     const tiles = this.game.tiles;
     this.rival = { score: null };
     this.analysis = { best: null, stagesDone: 0, stages: STAGES.length };
-    const bg = this.background;
     try {
-      const played = await bg.run({ type: "play", tiles, seed: this.seed });
+      const played = await this.background.run({ type: "play", tiles, seed: this.seed });
       this.rival = { score: played.score, moves: played.moves };
       this.render();
-      await bg.run({ type: "analyze", tiles, stages: STAGES }, (m) => {
+    } catch {
+      return; // stopped (new game or undo)
+    }
+    await this.searchBestPlay();
+  }
+
+  /// Search for the best play of the finished deal, in stages, showing each
+  /// improvement.
+  async searchBestPlay() {
+    this.analysis = { best: null, stagesDone: 0, stages: STAGES.length };
+    try {
+      await this.background.run({ type: "analyze", tiles: this.game.tiles, stages: STAGES }, (m) => {
         if (!this.analysis) return;
         const better = (b) => !this.analysis.best || b.score > this.analysis.best.score;
         if (m.type === "improved" && better(m)) this.analysis.best = { score: m.score, moves: m.moves };
@@ -449,7 +459,7 @@ export class PlayApp {
     c.addEventListener(
       "wheel",
       (e) => {
-        if (this.review || this.game.isOver()) return;
+        if (this.review || this.game?.current() == null) return;
         e.preventDefault();
         this.game.rotate(e.deltaY > 0 ? 1 : -1);
         this.render();
@@ -496,7 +506,7 @@ export class PlayApp {
         pinch = { spread: spread(), cell: this.view.cell };
         drag = null;
       } else if (fingers.size === 1) {
-        drag = { x: e.clientX, y: e.clientY, cursor: { ...this.game.cursor }, moved: false };
+        drag = { x: e.clientX, y: e.clientY, cursor: { ...this.game?.cursor }, moved: false };
       }
     });
     c.addEventListener("pointermove", (e) => {
@@ -520,7 +530,7 @@ export class PlayApp {
         }
         return;
       }
-      if (this.game.isOver()) return;
+      if (this.game?.current() == null) return;
       if (!drag.moved && Math.hypot(dx, dy) < 8) return;
       drag.moved = true;
       const s = this.view.cell;
@@ -592,7 +602,7 @@ export class PlayApp {
       const r = this.review;
       const v = g.tiles[r.step - 1];
       const m = r.pieces[r.step - 1];
-      const which = r.play === "best" ? "Best" : this.replayName ? "Play" : "You";
+      const which = r.play === "best" ? "Best" : this.yoursLabel();
       const pts = v * m.layer;
       return (
         `<div>${ui.muted(`Tile ${r.step}/${g.tiles.length}:`)} ${ui.bold(`a ${v}`, theme.valueCss(v))} ${ui.esc(`level ${m.layer}${pts ? `  +${pts}` : ""}`)}</div>` +
@@ -755,16 +765,16 @@ export class PlayApp {
     const row = (label, play, m, total) => {
       const on = r.play === play;
       const style = on ? `font-weight:700;color:${theme.ACCENT}` : "";
-      return `<div class="row" data-play="${play}">${ui.span(`${on ? "▸" : " "} ${label.padEnd(5)}${describeAt(m).padEnd(13)}`, style)}${ui.muted(total == null ? "" : `score ${total}`)}</div>`;
+      return `<div class="row" data-play="${play}">${ui.span(`${on ? "▸" : " "} ${label.padEnd(7)}${describeAt(m).padEnd(13)}`, style)}${ui.muted(total == null ? "" : `score ${total}`)}</div>`;
     };
     let out = `<div>${ui.muted(`Tile ${r.step} of ${n}: `)}${ui.bold(`a ${value}`, theme.valueCss(value))}</div><div class="gap"></div>`;
-    out += row(this.replayName ? "Play" : "You", "yours", yours[k], after(yours));
+    out += row(this.yoursLabel(), "yours", yours[k], after(yours));
     if (this.analysis) out += row("Best", "best", best?.[k], best ? after(best) : null);
     out += `<div class="gap"></div>`;
     const finalLine = (label, s) => `<div>  ${ui.esc(label.padEnd(12))}${ui.bold(s ?? "…")}</div>`;
     if (this.replayName) out += finalLine("Final score", g.score());
     else {
-      out += `<div>${ui.muted("Final scores")}</div>` + finalLine("You", g.score());
+      out += `<div>${ui.muted("Final scores")}</div>` + finalLine(this.yoursLabel(), g.score());
       if (this.analysis) out += finalLine("Best found", this.analysis.best?.score);
       if (this.rival) out += finalLine("Engine", this.rival.score);
     }

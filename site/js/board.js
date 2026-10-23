@@ -117,8 +117,8 @@ export class BoardView {
 
   /// Draw `pieces` (with `top`, their TopView). Options: `heightMap`,
   /// `ghost` ({value, move, problem}), `hint` ({value, move}), `last`
-  /// (index of the piece to underline).
-  draw(pieces, top, { heightMap = false, ghost = null, hint = null, last = pieces.length - 1 } = {}) {
+  /// (index of the piece to underline), `mark` (a {value, move} to outline).
+  draw(pieces, top, { heightMap = false, ghost = null, hint = null, last = pieces.length - 1, mark = null } = {}) {
     const { ctx, cell: s, vp } = this;
     const { ox, oy } = this.offset();
     ctx.clearRect(0, 0, this.w, this.h);
@@ -159,6 +159,11 @@ export class BoardView {
       }
     }
     ctx.stroke();
+
+    if (mark) {
+      const cs = cells(mark.value, mark.move).filter(([i, j]) => inView(i, j));
+      outline(ctx, cs, x, y, s, theme.HINT, Math.max(2, s / 8));
+    }
 
     if (hint) {
       const cs = cells(hint.value, hint.move).filter(([i, j]) => inView(i, j));
