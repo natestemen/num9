@@ -809,8 +809,16 @@ button {
     flex: none;
   }
 
+  /* Two rows of five. */
+  .record-list .list {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.35rem;
+    overflow: visible;
+  }
+
   .record-list .list button {
-    padding: 0.15rem 0.8ch;
+    padding: 0.15rem 0.6ch;
   }
 
   .record-list button small {

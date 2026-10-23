@@ -1,5 +1,7 @@
 """Write the site's data files from the records: data/records.json, the
-plays above 200 (the 236 record first) with their moves.
+best play for each of the ten highest scores (the 236 record first) with
+its moves. Plays with the same score are mostly the same tower with a
+leftover tile moved, so one of each shows ten different designs.
 
     python site/build_data.py <output directory>
 """
@@ -25,7 +27,10 @@ def main(out):
     plays = [play(ROOT / "records/free-order-236.txt", "free-order-236")]
     index = (ROOT / "records/above-200/INDEX.md").read_text()
     for file in re.findall(r"\]\(([^)]+\.txt)\)", index):
-        plays.append(play(ROOT / "records/above-200" / file, file.removesuffix(".txt")))
+        p = play(ROOT / "records/above-200" / file, file.removesuffix(".txt"))
+        if p["score"] not in {q["score"] for q in plays}:
+            plays.append(p)
+    plays = plays[:10]
     data = Path(out) / "data"
     data.mkdir(parents=True, exist_ok=True)
     (data / "records.json").write_text(json.dumps({"plays": plays}, separators=(",", ":")))

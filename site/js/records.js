@@ -12,11 +12,11 @@ export class RecordsApp {
     this.opts = opts;
     section.insertAdjacentHTML(
       "beforeend",
-      `<div class="record-list box"><div class="box-title">Plays above 200 (${data.plays.length})</div><div class="box-body"><div class="list"></div></div></div>`,
+      `<div class="record-list box"><div class="box-title">Best play for each of the top ${data.plays.length} scores</div><div class="box-body"><div class="list"></div></div></div>`,
     );
     const list = section.querySelector(".list");
     list.innerHTML = data.plays
-      .map((p, k) => `<button data-k="${k}"><b>${p.score}</b> <span>level ${p.top}</span> <small>${ui.esc(p.name)}</small></button>`)
+      .map((p, k) => `<button data-k="${k}" title="${ui.esc(p.name)}"><b>${p.score}</b> <span>level ${p.top}</span></button>`)
       .join("");
     list.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-k]");
@@ -29,7 +29,8 @@ export class RecordsApp {
 
   replayOf(k) {
     const p = this.data.plays[k];
-    return { name: p.name, steps: parsePlay(p.moves) };
+    const name = p.name === "free-order-236" ? "The 236 record" : `A ${p.score} play`;
+    return { name, steps: parsePlay(p.moves) };
   }
 
   select(k) {
