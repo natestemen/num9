@@ -579,8 +579,8 @@ button {
     min-height: 0;
   }
 
-  .zoom {
-    display: none;
+  .zoom button[data-zoom] {
+    display: none; /* pinch instead */
   }
 
   .status {

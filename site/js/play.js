@@ -301,6 +301,7 @@ export class PlayApp {
   onPlayKey(e, pending) {
     const g = this.game;
     const step = e.shiftKey ? 4 : 1;
+    if (/^(Arrow|[wasdWASD]$)/.test(e.key)) this.mouseAim = false;
     switch (e.key) {
       case "ArrowLeft":
       case "a":
@@ -365,6 +366,9 @@ export class PlayApp {
       case "?":
         this.opts.onHelp?.();
         break;
+      case "c":
+        this.recentre();
+        break;
       case "Escape":
         this.showHint = false;
         break;
@@ -384,32 +388,60 @@ export class PlayApp {
   wire() {
     const c = this.s.canvas;
     const aim = (e) => {
-      if (this.review || this.game.isOver()) return null;
+      if (!this.game || this.review || this.game.current() == null) return null;
       const cell = this.view.cellAt(e.clientX, e.clientY);
       if (!cell) return null;
       const v = this.game.current();
       const s = geometry.shapes[v][this.game.rot];
       const h = 1 + Math.max(...s.map((x) => x[0]));
       const w = 1 + Math.max(...s.map((x) => x[1]));
-      return [cell, cell[0] - Math.floor(h / 2), cell[1] - Math.floor(w / 2)];
+      // Keep the whole tile in view: the mouse never scrolls the board.
+      const vp = this.view.vp;
+      const i = Math.max(vp.top, Math.min(cell[0] - Math.floor(h / 2), vp.top + vp.rows - h));
+      const j = Math.max(vp.left, Math.min(cell[1] - Math.floor(w / 2), vp.left + vp.cols - w));
+      return [cell, i, j];
     };
+    // The mouse aims the tile and clicks to place it; dragging pans the board.
+    let press = null;
+    c.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      c.setPointerCapture(e.pointerId);
+      press = { x: e.clientX, y: e.clientY, top: this.view.vp.top, left: this.view.vp.left, panned: false };
+    });
     c.addEventListener("pointermove", (e) => {
       if (e.pointerType !== "mouse") return;
+      if (press) {
+        const dx = e.clientX - press.x;
+        const dy = e.clientY - press.y;
+        if (!press.panned && Math.hypot(dx, dy) < 5) return;
+        press.panned = true;
+        c.style.cursor = "grabbing";
+        const s = this.view.cell;
+        this.view.panTo(press.top - Math.round(dy / s), press.left - Math.round(dx / s));
+        this.mouseAim = true;
+        this.render();
+        return;
+      }
       const a = aim(e);
       if (!a) return;
+      this.mouseAim = true;
       const before = `${this.game.cursor.i},${this.game.cursor.j}`;
       this.game.moveTo(a[1], a[2]);
       if (before !== `${this.game.cursor.i},${this.game.cursor.j}`) this.render();
     });
     c.addEventListener("pointerup", (e) => {
-      if (e.pointerType !== "mouse" || e.button !== 0 || !aim(e)) return;
+      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      const panned = press?.panned;
+      press = null;
+      c.style.cursor = "";
+      if (panned || !aim(e)) return;
       this.place();
       this.render();
     });
     this.touch(c, aim);
     c.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      if (!this.review && !this.game.isOver()) {
+      if (!this.review && this.game?.current() != null) {
         this.game.rotate(1);
         this.render();
       }
@@ -426,8 +458,8 @@ export class PlayApp {
     );
     this.s.zoom.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-zoom]");
-      if (!b) return;
-      this.view.zoom(Number(b.dataset.zoom));
+      if (b) this.view.zoom(Number(b.dataset.zoom));
+      if (e.target.closest("button[data-centre]")) this.recentre();
       this.render();
     });
     this.s.panel.addEventListener("click", (e) => {
@@ -513,6 +545,22 @@ export class PlayApp {
     };
     c.addEventListener("pointerup", lift);
     c.addEventListener("pointercancel", lift);
+  }
+
+  /// What the played game is called in reviews.
+  yoursLabel() {
+    return this.replayName ? "Play" : "You";
+  }
+
+  yoursTitle() {
+    return this.replayName ?? "Your game";
+  }
+
+  /// Bring the stack (and the tile in hand) back into the middle.
+  recentre() {
+    if (this.review) this.view.centre(this.review.extent);
+    else this.view.fresh = true;
+    this.mouseAim = false;
   }
 
   // --------------------------------------------------------------------
@@ -612,15 +660,16 @@ export class PlayApp {
     const n = g.tiles.length;
     if (this.review) {
       const r = this.review;
-      const which = r.play === "best" ? "Best play found" : (this.replayName ?? "Your game");
+      const which = r.play === "best" ? "Best play found" : this.yoursTitle();
       this.s.title.textContent = `${which} · tile ${r.step} of ${n}${this.heightMap ? " · height map" : ""}`;
       this.view.draw(r.pieces, r.top, { heightMap: this.heightMap });
       return;
     }
     this.s.title.textContent = this.heightMap ? "Board · height map" : "Board";
     const v = g.current();
-    if (v != null) this.view.follow(g.cursor, v, g.rot, g.pieces);
-    else this.view.centre(extent(g.pieces));
+    // Keys move the view with the tile; with the mouse it stays put.
+    if (v != null) this.view.follow(g.cursor, v, g.rot, g.pieces, !this.mouseAim);
+    else if (this.view.fresh) this.view.centre(extent(g.pieces));
     const hint = this.showHint ? this.currentHint() : null;
     const pick = hint?.ranking()[this.suggestion];
     this.view.draw(g.pieces, g.top, {

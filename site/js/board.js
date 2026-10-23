@@ -71,13 +71,15 @@ export class BoardView {
     this.fresh = false;
   }
 
-  /// Keep the tile in hand on screen (centring on everything the first time).
-  follow(cursor, value, rot, pieces) {
+  /// Keep the tile in hand on screen (centring on everything the first time,
+  /// and moving with the tile only if `move`).
+  follow(cursor, value, rot, pieces, move = true) {
     const v = this.vp;
     const { h, w } = size(value ?? 0, rot);
     if (this.fresh) {
       this.centre(extent(pieces, [cursor.i, cursor.i + h, cursor.j, cursor.j + w]));
     }
+    if (!move) return;
     const mi = Math.min(2, Math.floor(Math.max(0, v.rows - h) / 2));
     const mj = Math.min(3, Math.floor(Math.max(0, v.cols - w) / 2));
     if (cursor.i < v.top + mi) v.top = cursor.i - mi;
@@ -85,6 +87,14 @@ export class BoardView {
     if (cursor.j < v.left + mj) v.left = cursor.j - mj;
     if (cursor.j + w + mj > v.left + v.cols) v.left = cursor.j + w + mj - v.cols;
     this.clampVp(v);
+  }
+
+  /// Put the view's top-left corner at (`top`, `left`).
+  panTo(top, left) {
+    this.vp.top = top;
+    this.vp.left = left;
+    this.clampVp(this.vp);
+    this.fresh = false;
   }
 
   /// Board cell under a point on the page, if any.

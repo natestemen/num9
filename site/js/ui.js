@@ -24,7 +24,7 @@ export function stage(section) {
       <div class="box board-box">
         <div class="box-title board-title"></div>
         <div class="canvas-wrap"><canvas></canvas></div>
-        <div class="zoom"><button data-zoom="-4" title="Zoom out">−</button><button data-zoom="4" title="Zoom in">+</button></div>
+        <div class="zoom"><button data-centre title="Re-centre on the stack (c)">⌖</button><button data-zoom="-4" title="Zoom out">−</button><button data-zoom="4" title="Zoom in">+</button></div>
         <div class="popup" hidden></div>
       </div>
       <div class="status"></div>
