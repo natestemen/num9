@@ -9,6 +9,10 @@ name = "num9_core"
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
+name = "brute"
+path = "src/bin/brute.rs"
+
+[[bin]]
 name = "bench"
 path = "src/bin/bench.rs"
 
