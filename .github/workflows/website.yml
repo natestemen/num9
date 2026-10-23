@@ -1,0 +1,36 @@
+# Build the website (site/) and publish it to the gh-pages branch, which
+# GitHub Pages serves.
+name: Website
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: website
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add wasm32-unknown-unknown
+      - uses: actions/cache@v4
+        with:
+          path: site/.cache
+          key: puzzle-tables-${{ hashFiles('rust/src/exact.rs', 'rust/src/board.rs', 'rust/src/piece.rs') }}
+      - run: site/build.sh
+      - name: Publish
+        working-directory: site/_site
+        run: |
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "Deploy ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages

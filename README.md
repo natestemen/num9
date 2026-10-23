@@ -69,6 +69,23 @@ own game. **?** shows all the keys.
 To search a deal on its own: `cargo run --release --manifest-path
 rust/Cargo.toml --bin solve -- --seed 42 --level 3 --per-layer 8`.
 
+## website
+
+**[natestemen.github.io/num9](https://natestemen.github.io/num9/)**: the
+terminal game in the browser, running the same engine compiled to
+WebAssembly (`rust/web`). Play with hints, see how the engine and its search
+for the best play do on your deal, try the exactly solved small-deck
+puzzles, and step through the record plays. To build it locally (needs
+`rustup target add wasm32-unknown-unknown`):
+
+```sh
+site/build.sh                                  # into site/_site
+python3 -m http.server -d site/_site 8000      # then open localhost:8000
+```
+
+Pushes to `main` rebuild it and publish it to the `gh-pages` branch
+(`.github/workflows/website.yml`).
+
 ## records
 
 The maximum possible score, with the order of the tiles chosen freely, is an
