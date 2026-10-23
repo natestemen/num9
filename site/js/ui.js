@@ -27,8 +27,10 @@ export function stage(section) {
         <div class="zoom"><button data-zoom="-4" title="Zoom out">−</button><button data-zoom="4" title="Zoom in">+</button></div>
         <div class="popup" hidden></div>
       </div>
+      <div class="status"></div>
       <aside class="panel"></aside>
     </div>
+    <div class="touchbar"></div>
     <div class="keys"></div>`,
   );
   const q = (s) => section.querySelector(s);
@@ -39,6 +41,23 @@ export function stage(section) {
     panel: q(".panel"),
     keys: q(".keys"),
     zoom: q(".zoom"),
+    status: q(".status"),
+    touchbar: q(".touchbar"),
+  };
+}
+
+/// Big buttons for touch screens: [label, key to send, class]; clicking one
+/// sends its key to `onKey`.
+export function touchBar(el, buttons, onKey) {
+  const sig = JSON.stringify(buttons);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  el.innerHTML = buttons
+    .map(([label, send, cls = ""]) => `<button class="${cls}" data-send="${esc(send)}">${esc(label)}</button>`)
+    .join("");
+  el.onclick = (e) => {
+    const b = e.target.closest("button[data-send]");
+    if (b) onKey({ key: b.dataset.send, shiftKey: false, ctrlKey: false, metaKey: false, preventDefault() {} });
   };
 }
 
@@ -55,11 +74,11 @@ export function keyBar(el, keys, onKey) {
 }
 
 /// A tile drawn as a little grid of blocks.
-export function tileShape(value, rot) {
+export function tileShape(value, rot, cls = "") {
   const cs = geometry.shapes[value][rot];
   const { h, w } = size(value, rot);
   const filled = new Set(cs.map(([r, c]) => `${r},${c}`));
-  let html = `<div class="shape" style="grid-template-columns:repeat(${w},1fr)">`;
+  let html = `<div class="shape ${cls}" style="grid-template-columns:repeat(${w},1fr)">`;
   for (let r = 0; r < h; r++) {
     for (let c = 0; c < w; c++) {
       html += filled.has(`${r},${c}`) ? `<i style="background:${theme.valueCss(value)}"></i>` : "<i></i>";

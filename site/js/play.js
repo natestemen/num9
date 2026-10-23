@@ -262,7 +262,8 @@ export class PlayApp {
     this.confirm = null;
     const key = e.key;
     let used = true;
-    if (this.review) used = this.onReviewKey(key);
+    if (key === "info") this.infoOpen = !this.infoOpen;
+    else if (this.review) used = this.onReviewKey(key);
     else if (this.game.isOver()) used = this.onOverKey(key);
     else used = this.onPlayKey(e, pending);
     if (used) this.render();
@@ -371,7 +372,7 @@ export class PlayApp {
         if (g.placed() <= 1 || pending === "n") this.newGame();
         else {
           this.confirm = "n";
-          this.say("Press n again to start a new game");
+          this.say("Press again to start a new game");
         }
         break;
       default:
@@ -401,19 +402,11 @@ export class PlayApp {
       if (before !== `${this.game.cursor.i},${this.game.cursor.j}`) this.render();
     });
     c.addEventListener("pointerup", (e) => {
-      const a = aim(e);
-      if (!a) return;
-      if (e.pointerType === "mouse") {
-        if (e.button === 0) this.place();
-      } else {
-        // Touch: tap to move the tile there, tap the tile to place it.
-        const p = this.game.preview();
-        const onGhost = cells(p.value, p.move).some(([i, j]) => i === a[0][0] && j === a[0][1]);
-        if (onGhost) this.place();
-        else this.game.moveTo(a[1], a[2]);
-      }
+      if (e.pointerType !== "mouse" || e.button !== 0 || !aim(e)) return;
+      this.place();
       this.render();
     });
+    this.touch(c, aim);
     c.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       if (!this.review && !this.game.isOver()) {
@@ -453,6 +446,75 @@ export class PlayApp {
     new ResizeObserver(() => this.render()).observe(this.s.canvas.parentElement);
   }
 
+  /// Touch: tap to move the tile there, tap the tile to place it; drag to
+  /// slide it (like a trackpad, so the finger never hides it); pinch to zoom.
+  touch(c, aim) {
+    const fingers = new Map();
+    let drag = null;
+    let pinch = null;
+    const spread = () => {
+      const [a, b] = [...fingers.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    c.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse") return;
+      c.setPointerCapture(e.pointerId);
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size === 2) {
+        pinch = { spread: spread(), cell: this.view.cell };
+        drag = null;
+      } else if (fingers.size === 1) {
+        drag = { x: e.clientX, y: e.clientY, cursor: { ...this.game.cursor }, moved: false };
+      }
+    });
+    c.addEventListener("pointermove", (e) => {
+      if (!fingers.has(e.pointerId)) return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && fingers.size === 2) {
+        this.view.setCell(pinch.cell * (spread() / pinch.spread));
+        this.render();
+        return;
+      }
+      if (!drag) return;
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (this.review) {
+        // Swipe left or right to step through the play.
+        if (Math.abs(dx) > 36 && Math.abs(dx) > Math.abs(dy)) {
+          this.showReview(this.review.play, this.review.step + (dx < 0 ? 1 : -1));
+          drag.x = e.clientX;
+          drag.moved = true;
+          this.render();
+        }
+        return;
+      }
+      if (this.game.isOver()) return;
+      if (!drag.moved && Math.hypot(dx, dy) < 8) return;
+      drag.moved = true;
+      const s = this.view.cell;
+      this.game.moveTo(drag.cursor.i + Math.round(dy / s), drag.cursor.j + Math.round(dx / s));
+      this.render();
+    });
+    const lift = (e) => {
+      if (!fingers.delete(e.pointerId)) return;
+      if (pinch) {
+        if (fingers.size === 0) pinch = null;
+        return;
+      }
+      const tap = drag && !drag.moved && e.type === "pointerup";
+      drag = null;
+      const a = tap && aim(e);
+      if (!a) return;
+      const p = this.game.preview();
+      const onTile = cells(p.value, p.move).some(([i, j]) => i === a[0][0] && j === a[0][1]);
+      if (onTile) this.place();
+      else this.game.moveTo(a[1], a[2]);
+      this.render();
+    };
+    c.addEventListener("pointerup", lift);
+    c.addEventListener("pointercancel", lift);
+  }
+
   // --------------------------------------------------------------------
   // Drawing
 
@@ -460,9 +522,89 @@ export class PlayApp {
     if (!this.game) return;
     this.view.resize();
     this.drawBoard();
-    this.s.panel.innerHTML = this.review ? this.reviewPanel() : this.panel();
+    this.s.panel.innerHTML = `<button class="sheet-close" data-send="info">Close ✕</button>` + (this.review ? this.reviewPanel() : this.panel());
+    this.s.panel.classList.toggle("open", !!this.infoOpen);
+    this.s.status.innerHTML = this.statusHtml();
+    ui.touchBar(this.s.touchbar, this.touchButtons(), (e) => this.onKey(e));
     this.drawKeys();
     this.drawPopup();
+  }
+
+  /// The facts for the status line (shown instead of the panel on phones).
+  statusFacts() {
+    const g = this.game;
+    const n = g.tiles.length;
+    const turn = Math.min(n, g.placed() + (g.isOver() ? 0 : 1));
+    return `Score ${ui.bold(g.score())}  ${ui.muted(`tile ${turn}/${n}`)}`;
+  }
+
+  statusHtml() {
+    const g = this.game;
+    if (this.review) {
+      const r = this.review;
+      const v = g.tiles[r.step - 1];
+      const m = r.pieces[r.step - 1];
+      const which = r.play === "best" ? "Best" : this.replayName ? "Play" : "You";
+      const pts = v * m.layer;
+      return (
+        `<div>${ui.muted(`Tile ${r.step}/${g.tiles.length}:`)} ${ui.bold(`a ${v}`, theme.valueCss(v))} ${ui.esc(`level ${m.layer}${pts ? `  +${pts}` : ""}`)}</div>` +
+        `<div>${ui.bold(which, theme.ACCENT)} ${ui.muted("score so far")} ${ui.bold(score(r.pieces))}</div>`
+      );
+    }
+    const facts = this.statusFacts();
+    let line1 = "";
+    const v = g.current();
+    if (v != null) {
+      const p = g.preview();
+      const where = p.problem
+        ? ui.span(`✗ ${p.problem}`, `color:${theme.BAD}`)
+        : ui.span(`✓ level ${p.move.layer}${p.value * p.move.layer ? `  +${p.value * p.move.layer}` : ""}`, `color:${theme.GOOD}`);
+      line1 = `<span class="in-hand">${ui.tileShape(v, g.rot, "mini")}${ui.bold(v, theme.valueCss(v))}</span> ${where}`;
+    }
+    let line2;
+    const h = this.showHint ? this.currentHint() : null;
+    const pick = h?.ranking()[this.suggestion];
+    if (pick) {
+      const digits = h.digits ?? 1;
+      const exp = Number.isNaN(pick.expected) ? "" : ` ${h.exact ? "=" : "≈"} ${pick.expected.toFixed(digits)}`;
+      line2 = ui.span(`▸ ${this.suggestion + 1}. ${describe(h.value, pick.move).trim()}${exp}`, `color:${theme.HINT};font-weight:700`);
+      const yours = h.yoursRated();
+      if (yours && sameMove(this.ghostMove(), h.askedAt) && yours.rank > 1) {
+        line2 += ui.muted(`  yours −${(h.ranking()[0].expected - yours.expected).toFixed(digits)}`);
+      }
+      if (!h.finished()) line2 += ui.muted(`  thinking… ${Math.round(h.progress() * 100)}%`);
+    } else if (g.isOver()) {
+      line2 = this.overLine();
+    } else if (this.message) {
+      const color = { info: "inherit", good: theme.GOOD, bad: theme.BAD }[this.message.tone];
+      line2 = ui.span(this.message.text, `color:${color}`);
+    } else {
+      line2 = ui.muted("Tap: aim · drag: slide · tap tile: place");
+    }
+    return (line1 ? `<div>${line1}</div>` : "") + `<div>${facts}</div><div>${line2}</div>`;
+  }
+
+  /// After the game: how it compares.
+  overLine() {
+    if (this.replayName) return ui.muted("Swipe or ◀ ▶ to step through it");
+    const ai = this.rival?.score;
+    const best = this.analysis?.best?.score;
+    return `${ui.muted("engine")} ${ui.bold(ai ?? "…")}  ${ui.muted("best found")} ${ui.bold(best ?? "…", theme.HINT)}`;
+  }
+
+  /// Buttons for touch screens.
+  touchButtons() {
+    const info = ["Info", "info"];
+    if (this.review) {
+      const other = this.movesOf("best") ? ["Switch", "Tab"] : ["Map", "Tab"];
+      return [["◀", "ArrowLeft"], ["▶", "ArrowRight", "primary"], ["⏮", "Home"], ["⏭", "End"], other, ["Back", "Escape"], info];
+    }
+    if (this.game.isOver()) {
+      if (this.replayName) return [["Step through", "b", "primary"], info];
+      return [["Review", "b", "primary"], ["New", "n"], ["Again", "r"], ["Board", "Escape"], ["Undo", "u"], info];
+    }
+    const hint = this.showHint && this.currentHint() ? ["Next", "g"] : ["Hint", "h"];
+    return [["↺", "R"], ["↻", " "], hint, ["Place", "Enter", "primary"], ["Undo", "u"], ["New", "n"], info];
   }
 
   drawBoard() {
@@ -478,6 +620,7 @@ export class PlayApp {
     this.s.title.textContent = this.heightMap ? "Board · height map" : "Board";
     const v = g.current();
     if (v != null) this.view.follow(g.cursor, v, g.rot, g.pieces);
+    else this.view.centre(extent(g.pieces));
     const hint = this.showHint ? this.currentHint() : null;
     const pick = hint?.ranking()[this.suggestion];
     this.view.draw(g.pieces, g.top, {

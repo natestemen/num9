@@ -250,6 +250,23 @@ export class PuzzleApp extends PlayApp {
     ];
   }
 
+  statusFacts() {
+    const lost = this.lost();
+    return `${super.statusFacts()}  ${ui.muted("given away")} ${ui.bold(lost.toFixed(2), lost > 1e-9 ? theme.BAD : theme.GOOD)}`;
+  }
+
+  overLine() {
+    const lost = this.lost();
+    return lost < 1e-9 ? ui.bold("Every move was perfect!", theme.GOOD) : ui.muted(`perfect play averages ${this.deckValue?.toFixed(2)}`);
+  }
+
+  touchButtons() {
+    const info = ["Info", "info"];
+    if (this.game.isOver()) return [["New", "n", "primary"], ["Again", "r"], ["Deck", "d"], ["Board", "Escape"], ["Undo", "u"], info];
+    const best = this.showHint && this.currentHint() ? ["Next", "g"] : ["Best", "h"];
+    return [["↺", "R"], ["↻", " "], best, ["Place", "Enter", "primary"], ["Undo", "u"], ["Deck", "d"], info];
+  }
+
   summary() {
     const g = this.game;
     const s = g.score();

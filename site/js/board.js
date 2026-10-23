@@ -47,7 +47,11 @@ export class BoardView {
   }
 
   zoom(delta) {
-    this.cell = Math.max(12, Math.min(48, this.cell + delta));
+    this.setCell(this.cell + delta);
+  }
+
+  setCell(px) {
+    this.cell = Math.round(Math.max(10, Math.min(56, px)));
     this.resize();
   }
 
