@@ -104,6 +104,13 @@ pub extern "C" fn board_size() -> u32 {
     (num9_core::HEIGHT * 1000 + num9_core::WIDTH) as u32
 }
 
+/// The deal for `seed`, the same as the terminal game's `--seed` (twenty
+/// values in the output).
+#[no_mangle]
+pub extern "C" fn deal(seed: u32) -> usize {
+    output(num9_core::game::shuffled_tiles(&mut Rng::new(seed as u64)))
+}
+
 /// Where the first tile goes (as a move in the output).
 #[no_mangle]
 pub extern "C" fn center_move() -> usize {
