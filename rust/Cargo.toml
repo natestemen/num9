@@ -40,7 +40,7 @@ python = ["dep:pyo3"]
 pyo3 = { version = "0.30", features = ["extension-module"], optional = true }
 
 [workspace]
-members = [".", "cli"]
+members = [".", "cli", "web"]
 
 [profile.release]
 lto = true
