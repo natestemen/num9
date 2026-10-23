@@ -24,7 +24,7 @@ export function stage(section) {
       <div class="box board-box">
         <div class="box-title board-title"></div>
         <div class="canvas-wrap"><canvas></canvas></div>
-        <div class="zoom"><button data-centre title="Re-centre on the stack (c)">⌖</button><button data-zoom="-4" title="Zoom out">−</button><button data-zoom="4" title="Zoom in">+</button></div>
+        <div class="zoom"><button data-unspot hidden title="Show every level again"></button><button data-map title="Height map: colour by level (tab)">▦</button><button data-centre title="Re-centre on the stack (c)">⌖</button><button data-zoom="-4" title="Zoom out">−</button><button data-zoom="4" title="Zoom in">+</button></div>
         <div class="popup" hidden></div>
       </div>
       <div class="status"></div>
@@ -94,7 +94,7 @@ export function levelLines(levels) {
     .reverse()
     .map(
       ([l, n, pts]) =>
-        `<div>${bold(`Level ${l}`, l === 0 ? theme.MUTED : theme.levelCss(l))} ${esc(String(n).padStart(2))} tile${n === 1 ? " " : "s"}  ${muted(`${String(pts).padStart(3)} pts`)}</div>`,
+        `<div class="lvl" data-level="${l}" title="Show only level ${l}">${bold(`Level ${l}`, l === 0 ? theme.MUTED : theme.levelCss(l))} ${esc(String(n).padStart(2))} tile${n === 1 ? " " : "s"}  ${muted(`${String(pts).padStart(3)} pts`)}</div>`,
     )
     .join("");
 }

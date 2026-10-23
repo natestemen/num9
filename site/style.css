@@ -203,6 +203,28 @@ section[hidden] {
   cursor: pointer;
 }
 
+.zoom button[data-unspot] {
+  width: auto;
+  padding: 0 0.8ch;
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.zoom button[hidden] {
+  display: none;
+}
+
+.lvl {
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.lvl:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
 .zoom button {
   width: 2.2em;
   height: 2.2em;

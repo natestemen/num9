@@ -192,8 +192,8 @@ export class CompanionApp extends PlayApp {
   render() {
     this.view.resize();
     this.drawPicker();
-    if (this.review) super.drawBoard();
-    else this.drawBoard();
+    this.drawBoard();
+    this.drawUnspot();
     this.s.panel.innerHTML = `<button class="sheet-close" data-send="info">Close ✕</button>` + (this.review ? this.reviewPanel() : this.panel());
     this.s.panel.classList.toggle("open", !!this.infoOpen);
     this.s.status.innerHTML = this.statusHtml();
@@ -207,6 +207,7 @@ export class CompanionApp extends PlayApp {
   }
 
   drawBoard() {
+    if (this.review) return super.drawBoard();
     const pieces = this.game?.pieces ?? [];
     const top = this.game?.top ?? new TopView([]);
     if (this.secret()) {
@@ -217,7 +218,11 @@ export class CompanionApp extends PlayApp {
     this.s.title.textContent = `Engine's board${this.heightMap ? " · height map" : ""}`;
     if (this.view.fresh && pieces.length) this.view.centre(extent(pieces));
     const m = this.lastMove;
-    this.view.draw(pieces, top, { heightMap: this.heightMap, mark: m && !this.done() ? { value: m.value, move: m.move } : null });
+    this.view.draw(pieces, top, {
+      heightMap: this.heightMap,
+      spotlight: this.spotlight(),
+      mark: m && !this.done() ? { value: m.value, move: m.move } : null,
+    });
   }
 
   /// The card buttons (or, after the game, where to enter your score).

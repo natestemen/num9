@@ -470,8 +470,32 @@ export class PlayApp {
       const b = e.target.closest("button[data-zoom]");
       if (b) this.view.zoom(Number(b.dataset.zoom));
       if (e.target.closest("button[data-centre]")) this.recentre();
+      if (e.target.closest("button[data-map]")) this.heightMap = !this.heightMap;
+      if (e.target.closest("button[data-unspot]")) this.pinnedLevel = null;
       this.render();
     });
+    // Hovering over (or tapping) a level in the Levels box shows only the
+    // tiles on that level; clicking keeps it that way.
+    for (const el of [this.s.panel, this.s.popup]) {
+      el.addEventListener("mouseover", (e) => {
+        const l = e.target.closest("[data-level]")?.dataset.level;
+        const level = l == null ? null : Number(l);
+        if (level === this.hoverLevel) return;
+        this.hoverLevel = level;
+        this.drawBoard();
+      });
+      el.addEventListener("mouseleave", () => {
+        this.hoverLevel = null;
+        this.drawBoard();
+      });
+      el.addEventListener("click", (e) => {
+        const l = e.target.closest("[data-level]")?.dataset.level;
+        if (l == null) return;
+        this.pinnedLevel = this.pinnedLevel === Number(l) ? null : Number(l);
+        this.infoOpen = false; // on phones, show the board
+        this.render();
+      });
+    }
     this.s.panel.addEventListener("click", (e) => {
       const send = e.target.closest("[data-send]");
       const play = e.target.closest("[data-play]");
@@ -576,10 +600,23 @@ export class PlayApp {
   // --------------------------------------------------------------------
   // Drawing
 
+  /// The level whose tiles stand out (the others dimmed), if any.
+  spotlight() {
+    return this.hoverLevel ?? this.pinnedLevel ?? null;
+  }
+
+  /// The button that turns the spotlight off.
+  drawUnspot() {
+    const b = this.s.zoom.querySelector("[data-unspot]");
+    b.hidden = this.pinnedLevel == null;
+    b.textContent = `✕ level ${this.pinnedLevel}`;
+  }
+
   render() {
     if (!this.game) return;
     this.view.resize();
     this.drawBoard();
+    this.drawUnspot();
     this.s.panel.innerHTML = `<button class="sheet-close" data-send="info">Close ✕</button>` + (this.review ? this.reviewPanel() : this.panel());
     this.s.panel.classList.toggle("open", !!this.infoOpen);
     this.s.status.innerHTML = this.statusHtml();
@@ -672,7 +709,7 @@ export class PlayApp {
       const r = this.review;
       const which = r.play === "best" ? "Best play found" : this.yoursTitle();
       this.s.title.textContent = `${which} · tile ${r.step} of ${n}${this.heightMap ? " · height map" : ""}`;
-      this.view.draw(r.pieces, r.top, { heightMap: this.heightMap });
+      this.view.draw(r.pieces, r.top, { heightMap: this.heightMap, spotlight: this.spotlight() });
       return;
     }
     this.s.title.textContent = this.heightMap ? "Board · height map" : "Board";
@@ -684,6 +721,7 @@ export class PlayApp {
     const pick = hint?.ranking()[this.suggestion];
     this.view.draw(g.pieces, g.top, {
       heightMap: this.heightMap,
+      spotlight: this.spotlight(),
       ghost: g.preview(),
       hint: pick ? { value: hint.value, move: pick.move } : null,
     });
