@@ -37,11 +37,26 @@ export const MUTED = "rgb(140,145,160)";
 export const ACCENT = "rgb(255,200,80)";
 
 const css = ([r, g, b]) => `rgb(${r},${g},${b})`;
-const shade = (layer) => [0.55, 0.72, 0.86, 1][Math.min(layer, 3)];
-const scale = (c, f) => c.map((x) => Math.min(255, Math.round(x * f)));
 
-/// [r, g, b] of a tile of `value` on `layer` (or at full brightness).
-export const tileRgb = (value, layer = 3) => scale(VALUE[value], shade(layer));
+/// [r, g, b] of a tile of `value` on `layer` (or at full brightness): each
+/// level brighter than the one below, up to the tile's own colour on level
+/// 4 and paler above that.
+export function tileRgb(value, layer = 4) {
+  const c = VALUE[value];
+  if (layer <= 4) {
+    const f = [0.45, 0.62, 0.78, 0.9, 1][layer];
+    return c.map((x) => Math.round(x * f));
+  }
+  const f = Math.min(0.5, 0.13 * (layer - 4));
+  return c.map((x) => Math.round(x + (255 - x) * f));
+}
+
+/// The rim marking a tile's level: the level's colour, a touch brighter so
+/// it shows on dark tiles.
+export function rimRgb(layer) {
+  return levelRgb(layer).map((x) => Math.min(255, Math.round(x * 1.15 + 20)));
+}
+
 export const levelRgb = (layer) => LEVEL[Math.min(layer, LEVEL.length - 1)];
 export const valueCss = (value) => css(VALUE[value]);
 export const levelCss = (layer) => css(levelRgb(layer));

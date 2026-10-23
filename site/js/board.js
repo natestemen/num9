@@ -117,8 +117,9 @@ export class BoardView {
 
   /// Draw `pieces` (with `top`, their TopView). Options: `heightMap`,
   /// `ghost` ({value, move, problem}), `hint` ({value, move}), `last`
-  /// (index of the piece to underline), `mark` (a {value, move} to outline).
-  draw(pieces, top, { heightMap = false, ghost = null, hint = null, last = pieces.length - 1, mark = null } = {}) {
+  /// (index of the piece to underline), `mark` (a {value, move} to outline),
+  /// `spotlight` (a level: tiles on others are dimmed).
+  draw(pieces, top, { heightMap = false, ghost = null, hint = null, last = pieces.length - 1, mark = null, spotlight = null } = {}) {
     const { ctx, cell: s, vp } = this;
     const { ox, oy } = this.offset();
     ctx.clearRect(0, 0, this.w, this.h);
@@ -127,38 +128,108 @@ export class BoardView {
     const inView = (i, j) => i >= vp.top && j >= vp.left && i < vp.top + vp.rows && j < vp.left + vp.cols;
     const labels = new Map(pieces.map((p, k) => [labelCell(p).join(","), k]));
 
-    for (let i = vp.top; i < vp.top + vp.rows; i++) {
-      for (let j = vp.left; j < vp.left + vp.cols; j++) {
-        const t = top.get(i, j);
-        if (!t) {
-          ctx.fillStyle = theme.EMPTY_DOT;
-          ctx.fillRect(x(j) + s / 2 - 1, y(i) + s / 2 - 1, 2, 2);
-          continue;
-        }
+    const rows = [vp.top, vp.top + vp.rows];
+    const colsRange = [vp.left, vp.left + vp.cols];
+    const each = (f) => {
+      for (let i = rows[0]; i < rows[1]; i++) for (let j = colsRange[0]; j < colsRange[1]; j++) f(i, j, top.get(i, j));
+    };
+
+    // The tiles (and dots on the empty floor).
+    each((i, j, t) => {
+      if (!t) {
+        ctx.fillStyle = theme.EMPTY_DOT;
+        ctx.fillRect(x(j) + s / 2 - 1, y(i) + s / 2 - 1, 2, 2);
+        return;
+      }
+      ctx.fillStyle = theme.css(heightMap ? theme.levelRgb(t.layer) : theme.tileRgb(t.value, t.layer));
+      ctx.fillRect(x(j), y(i), s, s);
+    });
+
+    // Shadows: with the light from the top left, a taller neighbour above or
+    // to the left casts a shadow on a cell, longer the bigger the drop.
+    each((i, j, t) => {
+      const h = t ? t.layer + 1 : 0;
+      const up = top.height(i - 1, j) - h;
+      const left = top.height(i, j - 1) - h;
+      const diag = top.height(i - 1, j - 1) - h;
+      const depth = (d) => s * Math.min(0.5, 0.14 + 0.1 * d);
+      if (up > 0) shade(ctx, x(j), y(i), s, depth(up), "down");
+      if (left > 0) shade(ctx, x(j), y(i), s, depth(left), "right");
+      if (diag > 0 && up <= 0 && left <= 0) {
+        const d = depth(diag);
+        const g = ctx.createRadialGradient(x(j), y(i), 0, x(j), y(i), d);
+        g.addColorStop(0, "rgba(0,0,0,0.5)");
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(x(j), y(i), d, d);
+      }
+    });
+
+    // Outlines: thin seams between tiles on the same level, heavier lines
+    // where the level changes.
+    const seams = new Path2D();
+    const steps = new Path2D();
+    each((i, j, t) => {
+      if (!t) return;
+      const line = (a, b, x0, y0, x1, y1) => {
+        const o = top.get(a, b);
+        if (o?.piece === t.piece) return;
+        (o?.layer === t.layer ? seams : steps).moveTo(x0, y0);
+        (o?.layer === t.layer ? seams : steps).lineTo(x1, y1);
+      };
+      line(i - 1, j, x(j), y(i), x(j) + s, y(i));
+      line(i + 1, j, x(j), y(i) + s, x(j) + s, y(i) + s);
+      line(i, j - 1, x(j), y(i), x(j), y(i) + s);
+      line(i, j + 1, x(j) + s, y(i), x(j) + s, y(i) + s);
+    });
+    ctx.strokeStyle = "rgba(10,12,16,0.55)";
+    ctx.lineWidth = Math.max(1, s / 16);
+    ctx.stroke(seams);
+    ctx.strokeStyle = "rgba(6,7,10,0.95)";
+    ctx.lineWidth = Math.max(1.5, s / 10);
+    ctx.stroke(steps);
+
+    // A rim in the level's colour (as in the Levels box) inside every tile
+    // above the ground.
+    if (!heightMap) {
+      const w = Math.max(1.5, s / 13);
+      const inset = w / 2 + Math.max(1, s / 22);
+      each((i, j, t) => {
+        if (!t || t.layer === 0) return;
+        const edgeOf = (a, b) => top.get(a, b)?.piece !== t.piece;
+        const [n, so, we, ea] = [edgeOf(i - 1, j), edgeOf(i + 1, j), edgeOf(i, j - 1), edgeOf(i, j + 1)];
+        const x0 = x(j);
+        const y0 = y(i);
+        ctx.strokeStyle = theme.css(theme.rimRgb(t.layer));
+        ctx.lineWidth = w;
+        ctx.beginPath();
+        const a0 = we ? x0 + inset : x0;
+        const a1 = ea ? x0 + s - inset : x0 + s;
+        const b0 = n ? y0 + inset : y0;
+        const b1 = so ? y0 + s - inset : y0 + s;
+        if (n) edge(ctx, a0, y0 + inset, a1, y0 + inset);
+        if (so) edge(ctx, a0, y0 + s - inset, a1, y0 + s - inset);
+        if (we) edge(ctx, x0 + inset, b0, x0 + inset, b1);
+        if (ea) edge(ctx, x0 + s - inset, b0, x0 + s - inset, b1);
+        ctx.stroke();
+      });
+    }
+
+    if (spotlight != null) {
+      ctx.fillStyle = "rgba(15,17,22,0.78)";
+      each((i, j, t) => {
+        if (t && t.layer !== spotlight) ctx.fillRect(x(j), y(i), s, s);
+      });
+    }
+
+    // Labels last, over shadows and rims.
+    each((i, j, t) => {
+      if (spotlight != null && t?.layer !== spotlight) return;
+      if (t && labels.get(`${i},${j}`) === t.piece) {
         const rgb = heightMap ? theme.levelRgb(t.layer) : theme.tileRgb(t.value, t.layer);
-        ctx.fillStyle = theme.css(rgb);
-        ctx.fillRect(x(j), y(i), s, s);
-        if (labels.get(`${i},${j}`) === t.piece) {
-          this.label(x(j), y(i), `${t.value}${theme.superscript(t.layer)}`, theme.textOn(rgb), t.piece === last);
-        }
+        this.label(x(j), y(i), `${t.value}${theme.superscript(t.layer)}`, theme.textOn(rgb), t.piece === last);
       }
-    }
-    // Outline each piece where it meets another or the floor.
-    ctx.strokeStyle = "rgba(10,12,16,0.75)";
-    ctx.lineWidth = Math.max(1, s / 14);
-    ctx.beginPath();
-    for (let i = vp.top; i < vp.top + vp.rows; i++) {
-      for (let j = vp.left; j < vp.left + vp.cols; j++) {
-        const t = top.get(i, j);
-        if (!t) continue;
-        const other = (a, b) => top.get(a, b)?.piece !== t.piece;
-        if (other(i - 1, j)) edge(ctx, x(j), y(i), x(j) + s, y(i));
-        if (other(i + 1, j)) edge(ctx, x(j), y(i) + s, x(j) + s, y(i) + s);
-        if (other(i, j - 1)) edge(ctx, x(j), y(i), x(j), y(i) + s);
-        if (other(i, j + 1)) edge(ctx, x(j) + s, y(i), x(j) + s, y(i) + s);
-      }
-    }
-    ctx.stroke();
+    });
 
     if (mark) {
       const cs = cells(mark.value, mark.move).filter(([i, j]) => inView(i, j));
@@ -220,6 +291,20 @@ export function extent(pieces, [a, b, c, d] = [Infinity, -Infinity, Infinity, -I
 function edge(ctx, x0, y0, x1, y1) {
   ctx.moveTo(x0, y0);
   ctx.lineTo(x1, y1);
+}
+
+/// A shadow falling from the top edge of a cell ("down") or its left edge
+/// ("right"), `depth` pixels long.
+function shade(ctx, px, py, s, depth, direction) {
+  const g =
+    direction === "down"
+      ? ctx.createLinearGradient(px, py, px, py + depth)
+      : ctx.createLinearGradient(px, py, px + depth, py);
+  g.addColorStop(0, "rgba(0,0,0,0.55)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  if (direction === "down") ctx.fillRect(px, py, s, depth);
+  else ctx.fillRect(px, py, depth, s);
 }
 
 function hatch(ctx, px, py, s, color, alpha) {
