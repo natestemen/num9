@@ -1,0 +1,535 @@
+/* A terminal look, after the num9 terminal game: dark background,
+   monospace text, rounded boxes with their titles in the border. */
+
+:root {
+  --bg: #0f1116;
+  --fg: #e4e6eb;
+  --muted: rgb(140, 145, 160);
+  --line: rgb(70, 74, 86);
+  --accent: rgb(255, 200, 80);
+  --hint: rgb(80, 230, 240);
+  --good: rgb(120, 220, 120);
+  --bad: rgb(255, 120, 120);
+  --font: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.45 var(--font);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--hint);
+}
+
+kbd {
+  font: inherit;
+  font-weight: 700;
+  color: #000;
+  background: var(--muted);
+  padding: 0 0.5ch;
+  border-radius: 3px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 2ch;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand span {
+  color: var(--muted);
+}
+
+nav {
+  display: flex;
+  gap: 0.5ch;
+  flex-wrap: wrap;
+}
+
+nav a,
+.source {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.1rem 0.8ch;
+  border-radius: 4px;
+}
+
+nav a:hover,
+.source:hover {
+  color: var(--fg);
+}
+
+nav a.on {
+  color: #000;
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.source {
+  margin-left: auto;
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#loading {
+  margin: 2rem;
+  color: var(--muted);
+}
+
+section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.9rem 1rem 0.5rem;
+  gap: 0.9rem;
+}
+
+section[hidden] {
+  display: none;
+}
+
+.intro {
+  margin: 0;
+  color: var(--muted);
+  max-width: 110ch;
+}
+
+.intro b,
+.intro em {
+  color: var(--fg);
+}
+
+/* Boxes with the title set into the top border. */
+.box {
+  position: relative;
+  border: 1px solid var(--muted);
+  border-radius: 9px;
+  padding: 0.75rem 1.2ch 0.5rem;
+}
+
+.box-title {
+  position: absolute;
+  top: -0.78em;
+  left: 1.2ch;
+  padding: 0 0.6ch;
+  background: var(--bg);
+  font-weight: 700;
+  white-space: nowrap;
+  max-width: calc(100% - 2.4ch);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.box-body {
+  white-space: pre-wrap;
+}
+
+/* Board and side panel. */
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 1.2ch;
+}
+
+.board-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  padding: 0.7rem 0.6ch 0.4rem;
+}
+
+.canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-wrap canvas {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.zoom {
+  position: absolute;
+  right: 1ch;
+  bottom: 0.5rem;
+  display: flex;
+  gap: 0.4ch;
+}
+
+.zoom button,
+.key,
+.decks button,
+.record-list button {
+  font: inherit;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.zoom button {
+  width: 2.2em;
+  height: 2.2em;
+  background: rgba(15, 17, 22, 0.85);
+}
+
+.panel {
+  width: 38ch;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  padding-top: 0.6rem;
+  overflow-y: auto;
+}
+
+.panel .box-body {
+  white-space: pre;
+}
+
+.panel .grow {
+  flex: 1;
+  min-height: 3.2rem;
+}
+
+.panel .row[data-send],
+.panel .row[data-play] {
+  cursor: pointer;
+}
+
+.panel .row[data-send]:hover,
+.panel .row[data-play]:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.gap {
+  height: 0.7em;
+}
+
+.message {
+  padding: 0 1ch;
+  white-space: normal;
+}
+
+.hand {
+  display: flex;
+  align-items: center;
+  gap: 3ch;
+  padding: 0.3rem 0 0.4rem 2ch;
+  min-height: 5.4rem;
+}
+
+.hand > div:last-child > div:first-child {
+  font-size: 1.6em;
+  line-height: 1.1;
+}
+
+.shape {
+  display: grid;
+  gap: 0;
+}
+
+.shape i {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.gauge {
+  position: relative;
+  height: 1.45em;
+  background: rgb(40, 44, 52);
+}
+
+.gauge div {
+  height: 100%;
+  background: var(--hint);
+  opacity: 0.85;
+}
+
+.gauge span {
+  position: absolute;
+  inset: 0;
+  text-align: center;
+  mix-blend-mode: difference;
+}
+
+/* Key bar: chips that can be clicked too. */
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.2ch;
+  padding: 0.5rem 0 0.2rem;
+}
+
+.key {
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.key b {
+  color: #000;
+  background: var(--muted);
+  padding: 0 0.6ch;
+  border-radius: 3px;
+  margin-right: 0.4ch;
+}
+
+.key:hover b {
+  background: var(--fg);
+}
+
+/* The summary over the board. */
+.popup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(62ch, calc(100% - 2ch));
+  max-height: calc(100% - 2rem);
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--muted);
+  border-radius: 9px;
+  padding: 0.9rem 2ch 0.8rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.popup .box-title {
+  position: static;
+  padding: 0;
+  margin-bottom: 0.5rem;
+  color: var(--accent);
+}
+
+.popup .moves {
+  columns: 2;
+  margin-top: 0.4rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.6ch;
+}
+
+/* Puzzles and records. */
+.decks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6ch;
+}
+
+.decks button,
+.record-list button {
+  padding: 0.2rem 1ch;
+  color: var(--muted);
+}
+
+.decks button.on,
+.record-list button.on {
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.record-list .box-body {
+  white-space: normal;
+}
+
+.record-list .list {
+  display: flex;
+  gap: 0.6ch;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+
+.record-list button {
+  flex: none;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.record-list button span,
+.record-list button small {
+  display: block;
+  color: inherit;
+  opacity: 0.8;
+  font-size: 0.85em;
+}
+
+/* About. */
+#about {
+  overflow-y: auto;
+}
+
+article {
+  max-width: 92ch;
+  margin: 0 auto 2rem;
+}
+
+article h1 {
+  color: var(--accent);
+  font-size: 1.4em;
+}
+
+article h2 {
+  font-size: 1.1em;
+  margin-top: 1.6em;
+}
+
+article p {
+  color: #cfd2d8;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+th,
+td {
+  padding: 0.25rem 1.6ch;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Help. */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 10;
+  padding: 1rem;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal .box {
+  background: var(--bg);
+  max-width: 76ch;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.modal .box-body {
+  white-space: normal;
+}
+
+.modal dl {
+  display: grid;
+  grid-template-columns: 15ch 1fr;
+  gap: 0.15rem 1ch;
+}
+
+.modal dt {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.modal dd {
+  margin: 0;
+}
+
+.dim {
+  color: var(--muted);
+}
+
+/* Phones and narrow windows: panel under the board. */
+@media (max-width: 860px) {
+  html,
+  body {
+    height: auto;
+  }
+
+  header {
+    flex-wrap: wrap;
+    gap: 0.4rem 2ch;
+  }
+
+  /* Board, then the keys (tappable), then the panel. */
+  .stage {
+    display: contents;
+  }
+
+  .board-box {
+    order: 1;
+  }
+
+  .keys {
+    order: 2;
+  }
+
+  .panel {
+    order: 3;
+  }
+
+  .board-box {
+    height: 62vh;
+    flex: none;
+  }
+
+  .panel {
+    width: auto;
+    overflow: visible;
+  }
+
+  .panel .box-body {
+    white-space: pre-wrap;
+  }
+
+  .keys {
+    gap: 0.5rem 1.4ch;
+  }
+
+  .key b {
+    padding: 0.15rem 0.8ch;
+  }
+}
