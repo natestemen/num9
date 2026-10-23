@@ -55,7 +55,7 @@ export class Pool {
         const job = this.handlers.get(data.id);
         this.handlers.delete(data.id);
         this.idle.push(w);
-        if (job && !job.cancelled.value) job.resolve(data);
+        if (job && !job.cancelled.value) job.resolve(data, job.msg);
         this.pump();
       };
     }
@@ -66,7 +66,7 @@ export class Pool {
     return new Pool(Math.max(1, Math.min(8, cores - 1)));
   }
 
-  /// Queue jobs; `onResult(reply)` hears each as it finishes. Returns a
+  /// Queue jobs; `onResult(reply, request)` hears each as it finishes. Returns a
   /// function that cancels whatever hasn't run yet.
   submit(msgs, onResult) {
     const cancelled = { value: false };
