@@ -482,54 +482,219 @@ th {
   color: var(--muted);
 }
 
-/* Phones and narrow windows: panel under the board. */
+/* Touch controls, the status line and the panel's close button only show
+   on touch screens and phones (below). */
+.status,
+.touchbar,
+.sheet-close {
+  display: none;
+}
+
+.touchbar {
+  gap: 0.4rem;
+  padding: 0.45rem 0 0.1rem;
+}
+
+.touchbar button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.9rem;
+  font: inherit;
+  font-size: 1.05em;
+  font-weight: 700;
+  color: var(--fg);
+  background: rgb(30, 33, 41);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 0.3ch;
+  touch-action: manipulation;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.touchbar button:active {
+  background: rgb(50, 54, 66);
+}
+
+.touchbar button.primary {
+  flex-grow: 1.6;
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button {
+  touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+  .touchbar {
+    display: flex;
+  }
+}
+
+/* Phones and narrow windows: everything on one screen. The board takes
+   what's left after a two-line status and the buttons; the panel becomes a
+   sheet that slides up from the bottom (Info). */
 @media (max-width: 860px) {
   html,
   body {
-    height: auto;
+    height: 100%;
+    height: 100dvh;
+    font-size: 13px;
   }
 
   header {
-    flex-wrap: wrap;
-    gap: 0.4rem 2ch;
+    padding: 0.35rem 0.6rem;
+    gap: 1.2ch;
   }
 
-  /* Board, then the keys (tappable), then the panel. */
+  .brand span,
+  .source {
+    display: none;
+  }
+
+  nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  section {
+    padding: 0.7rem 0.5rem calc(0.4rem + env(safe-area-inset-bottom));
+    gap: 0.5rem;
+  }
+
+  section > .intro {
+    display: none;
+  }
+
   .stage {
-    display: contents;
+    flex-direction: column;
+    gap: 0.35rem;
   }
 
   .board-box {
-    order: 1;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .zoom {
+    display: none;
+  }
+
+  .status {
+    display: block;
+    padding: 0 0.6ch;
+    line-height: 1.5;
+  }
+
+  .status > div {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .in-hand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6ch;
+    vertical-align: middle;
+  }
+
+  .shape.mini i {
+    width: 0.42rem;
+    height: 0.42rem;
+  }
+
+  .touchbar {
+    display: flex;
   }
 
   .keys {
-    order: 2;
+    display: none;
   }
 
   .panel {
-    order: 3;
-  }
-
-  .board-box {
-    height: 62vh;
-    flex: none;
-  }
-
-  .panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
     width: auto;
-    overflow: visible;
+    max-height: 78dvh;
+    padding: 0.6rem 0.8rem calc(1rem + env(safe-area-inset-bottom));
+    gap: 1rem;
+    background: var(--bg);
+    border-top: 1px solid var(--muted);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.7);
+    transform: translateY(105%);
+    transition: transform 0.2s ease;
+    visibility: hidden;
+  }
+
+  .panel.open {
+    transform: none;
+    visibility: visible;
   }
 
   .panel .box-body {
     white-space: pre-wrap;
   }
 
-  .keys {
-    gap: 0.5rem 1.4ch;
+  .panel .grow {
+    flex: none;
   }
 
-  .key b {
+  .sheet-close {
+    display: block;
+    align-self: flex-end;
+    font: inherit;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.3rem 1ch;
+  }
+
+  .popup {
+    font-size: 12.5px;
+    padding: 0.8rem 1.6ch;
+  }
+
+  .popup .moves {
+    columns: 1;
+  }
+
+  .popup .actions {
+    display: none; /* the buttons below do the same */
+  }
+
+  .decks {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    flex: none;
+  }
+
+  .decks button {
+    flex: none;
+    min-height: 2.2rem;
+  }
+
+  .record-list {
+    flex: none;
+  }
+
+  .record-list .list button {
     padding: 0.15rem 0.8ch;
+  }
+
+  .record-list button small {
+    display: none;
+  }
+
+  .modal dl {
+    grid-template-columns: 11ch 1fr;
   }
 }
