@@ -17,6 +17,8 @@ export class Hint {
     this.placed = game.placed();
     this.value = game.current();
     this.askedAt = yours;
+    // The engine's board is shared by every screen: make it this game's.
+    game.engine.load(game.pieces);
     const picks = game.engine.hintCandidates(this.value, PER_LAYER);
     this.yours = null;
     if (yours) {
