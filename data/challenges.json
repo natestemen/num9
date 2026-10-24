@@ -1,0 +1,126 @@
+{
+ "challenges": [
+  {
+   "id": "two-0-1",
+   "name": "Two 0s and two 1s",
+   "counts": [
+    2,
+    2
+   ],
+   "target": 2,
+   "proven": true,
+   "play": "0@0:80:60:0 0@0:76:59:0 1@1:79:59:0 1@1:77:61:2"
+  },
+  {
+   "id": "one-0-3",
+   "name": "One each of 0 to 3",
+   "counts": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "target": 3,
+   "proven": true,
+   "play": "0@0:80:60:0 1@0:76:59:0 2@0:75:61:0 3@1:77:60:2"
+  },
+  {
+   "id": "one-0-4",
+   "name": "One each of 0 to 4",
+   "counts": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "target": 7,
+   "proven": true,
+   "play": "0@0:80:60:0 1@0:79:62:0 2@0:75:61:0 3@1:80:60:3 4@1:76:61:0"
+  },
+  {
+   "id": "two-0-2",
+   "name": "Two each of 0, 1 and 2",
+   "counts": [
+    2,
+    2,
+    2
+   ],
+   "target": 7,
+   "proven": true,
+   "play": "0@0:80:60:0 0@0:76:60:0 1@0:77:58:0 1@1:80:59:0 2@1:78:59:3 2@2:78:59:1"
+  },
+  {
+   "id": "one-0-5",
+   "name": "One each of 0 to 5",
+   "counts": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "target": 16,
+   "proven": true,
+   "play": "0@0:80:60:0 1@0:79:58:0 2@0:77:58:3 3@1:77:58:1 5@1:80:59:3 4@2:79:59:1"
+  },
+  {
+   "id": "one-0-9",
+   "name": "One each of 0 to 9",
+   "counts": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "target": 62,
+   "proven": false,
+   "play": "5@0:80:60:0 0@0:78:63:2 2@0:77:59:3 3@0:79:58:2 7@1:78:60:1 6@1:79:58:2 4@1:80:61:2 1@2:78:60:1 8@2:79:58:1 9@3:79:58:1"
+  },
+  {
+   "id": "two-5-9",
+   "name": "Two each of 5 to 9",
+   "counts": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "target": 82,
+   "proven": false,
+   "play": "5@0:80:60:0 5@0:80:63:3 6@0:77:63:1 6@0:77:65:3 9@1:77:64:1 7@1:78:63:3 7@1:80:61:1 8@2:77:63:0 8@2:77:65:0 9@3:77:64:0"
+  },
+  {
+   "id": "full",
+   "name": "The whole game",
+   "counts": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "target": 236,
+   "proven": false,
+   "play": "2@0:80:60:0 0@0:80:56:1 5@0:83:56:3 5@0:84:58:1 0@0:87:59:0 6@1:82:56:0 3@1:80:57:0 6@1:84:59:0 4@1:82:60:2 2@2:82:56:2 8@2:82:58:0 4@2:84:59:0 9@3:82:56:2 1@3:82:59:0 1@3:83:59:2 9@4:82:57:1 8@4:84:57:1 7@5:82:57:0 7@5:82:58:2 3@6:82:57:0\n\nfound by: cargo run --release --manifest-path rust/Cargo.toml --bin tower -- --tops 6 --width 150 --per-design 10 --area-cost 8   (about 9 minutes on a 4-core laptop)\ncheck:    python records/check_play.py records/free-order-236.txt\n\nThe tower, top level first (each cell shows its tile's value):\n\nlevel 6  (18 points)\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 3 3 3 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 3 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 3 3 \u00b7 \u00b7 \u00b7\n   \u00b7 3 3 3 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n\nlevel 5  (70 points)\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 7 7 7 7 \u00b7 \u00b7\n   \u00b7 \u00b7 7 7 7 \u00b7 \u00b7\n   \u00b7 7 7 7 \u00b7 \u00b7 \u00b7\n   \u00b7 7 7 7 7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n\nlevel 4  (68 points)\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 9 9 9 9 \u00b7 \u00b7\n   \u00b7 9 9 9 9 \u00b7 \u00b7\n   \u00b7 8 8 9 9 \u00b7 \u00b7\n   \u00b7 8 8 8 8 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 8 8 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n\nlevel 3  (33 points)\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 9 9 1 1 \u00b7 \u00b7\n   \u00b7 9 9 1 1 \u00b7 \u00b7\n   9 9 9 1 1 \u00b7 \u00b7\n   9 9 9 1 1 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 1 1 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n\nlevel 2  (28 points)\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   2 2 2 8 8 \u00b7 \u00b7\n   \u00b7 2 2 8 8 \u00b7 \u00b7\n   2 2 8 8 4 4 \u00b7\n   2 2 8 8 4 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 4 4 4 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 4 4 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n\nlevel 1  (19 points)\n   \u00b7 3 3 3 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 3 \u00b7 \u00b7 \u00b7\n   6 6 3 3 4 4 \u00b7\n   6 3 3 3 4 4 4\n   6 6 6 6 6 4 \u00b7\n   6 6 6 6 4 4 \u00b7\n   \u00b7 \u00b7 \u00b7 6 6 6 \u00b7\n   \u00b7 \u00b7 \u00b7 6 6 6 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n   \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7 \u00b7\n\nlevel 0  (0 points)\n   0 0 0 0 \u00b7 2 2\n   0 \u00b7 \u00b7 0 \u00b7 2 2\n   0 0 0 0 2 2 \u00b7\n   5 5 5 5 2 2 2\n   5 5 5 5 5 5 \u00b7\n   5 5 5 5 5 5 \u00b7\n   \u00b7 \u00b7 5 5 5 5 \u00b7\n   \u00b7 \u00b7 \u00b7 0 0 0 \u00b7\n   \u00b7 \u00b7 \u00b7 0 \u00b7 0 \u00b7\n   \u00b7 \u00b7 \u00b7 0 \u00b7 0 \u00b7\n   \u00b7 \u00b7 \u00b7 0 0 0 \u00b7"
+  }
+ ]
+}
