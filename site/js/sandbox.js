@@ -14,6 +14,7 @@ import { BoardView, extent } from "./board.js";
 import { loadBests, saveBest } from "./challenges.js";
 import * as theme from "./theme.js";
 import * as ui from "./ui.js";
+import { link, said, share, squares } from "./share.js";
 
 /// Where the shelf the tiles start on begins: to the right of the building
 /// space, which is around the middle of the board.
@@ -77,6 +78,22 @@ export class SandboxApp {
     this.deck = deck;
     this.opts.onDeck?.(deck);
     this.reset();
+  }
+
+  /// Follow a link to a challenge.
+  route(arg) {
+    const deck = this.opts.challenges.find((d) => d.id === arg);
+    if (deck && deck !== this.deck) this.choose(deck);
+  }
+
+  /// Send someone how you did, with a link to the same challenge.
+  async shareResult(score, pieces) {
+    const d = this.deck;
+    const of = d.proven ? `the most possible is ${d.target}` : `the best known is ${d.target}`;
+    const text = [`NMBR 9 challenge · ${d.name}`, `I scored ${score} (${of})`, squares(pieces), "Can you get there?"].join("\n");
+    const outcome = await share(text, link(`challenges/${d.id}`));
+    this.say(...said(outcome, "your score"));
+    this.render();
   }
 
   next() {
@@ -373,6 +390,9 @@ export class SandboxApp {
         case "d":
           this.next();
           break;
+        case "l":
+          if (this.result) this.shareResult(this.result.score, this.result.steps);
+          break;
         case "c":
           this.view.centre(extent(this.tiles));
           break;
@@ -569,6 +589,7 @@ export class SandboxApp {
     out += ui.levelLines(levels(this.result.steps)) + `<div class="gap"></div><div>${verdict}</div>`;
     if (s > t) out += `<div>${ui.muted("That would be a new record: copy your play and share it.")}</div>`;
     out += `<div class="gap"></div><div class="actions">${[
+      ["l", "share your score"],
       ...(s > t ? [["copy", "copy your play"]] : []),
       ["s", "see a best play"],
       ["esc", "keep building", "Escape"],

@@ -564,6 +564,17 @@ section[hidden] {
   background: rgb(40, 44, 54);
 }
 
+/* A button that reads like a link (share this deal). */
+.linkish {
+  font: inherit;
+  padding: 0;
+  color: var(--hint);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Challenges on a computer: submit the stack. */
 .panel .submit {
   font: inherit;

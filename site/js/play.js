@@ -8,6 +8,7 @@ import { BoardView, extent } from "./board.js";
 import { Hint } from "./hint.js";
 import { Background } from "./workers.js";
 import { Coach, GameAnalysis, plural } from "./coach.js";
+import { dealCode, link, parseDeal, said, share, squares } from "./share.js";
 import * as theme from "./theme.js";
 import * as ui from "./ui.js";
 
@@ -48,10 +49,54 @@ export class PlayApp {
   newGame(seed = randomSeed(), tiles = null) {
     this.stopWork();
     this.seed = seed;
-    this.game = new Game(this.engine, tiles ?? this.engine.deal(seed));
+    const dealt = this.engine.deal(seed);
+    this.game = new Game(this.engine, tiles ?? dealt);
+    // The deal's address: its number, or (for a deal given tile by tile)
+    // the tiles themselves.
+    const numbered = !tiles || tiles.every((v, k) => v === dealt[k]);
+    this.dealHash = numbered ? `play/${seed}` : `play/t/${dealCode(tiles)}`;
     this.replayName = null;
     this.reset();
-    this.opts.onDeal?.(seed);
+    this.opts.onDeal?.(this.dealHash);
+    this.render();
+  }
+
+  /// Follow a link to a deal (`12345` or `t/<the tiles>`), unless it's the
+  /// deal on the board already.
+  route(arg) {
+    if (!arg || `play/${arg}` === this.dealHash) return;
+    const tiles = parseDeal(arg.replace(/^t\//, ""));
+    if (/^\d+$/.test(arg)) this.newGame(Number(arg) >>> 0);
+    else if (arg.startsWith("t/") && tiles) this.newGame(0, tiles);
+  }
+
+  /// Send someone this deal.
+  async shareDeal() {
+    const what = this.dealHash.startsWith("play/t/") ? "these tiles" : `deal #${this.seed}`;
+    const outcome = await share(`Play NMBR 9 with me: ${what}, the same tiles in the same order.`, link(this.dealHash));
+    this.say(...said(outcome, "a link to this deal"));
+    this.render();
+  }
+
+  /// Send someone how this game went, with a link to play the same deal.
+  async shareScore() {
+    const g = this.game;
+    const name = this.dealHash.startsWith("play/t/") ? "a deal for you" : `deal #${this.seed}`;
+    const lines = [`NMBR 9 · ${name}`];
+    let scores = `I scored ${g.score()}`;
+    if (this.rival?.score != null) scores += ` · the engine ${this.rival.score}`;
+    if (this.analysis?.best) scores += ` · best found ${this.analysis.best.score}`;
+    lines.push(scores);
+    const a = this.gameAnalysis;
+    if (a?.finished()) {
+      const sum = a.summary();
+      const slips = ["blunder", "mistake", "inaccuracy"].filter((id) => sum.counts[id]).map((id) => plural(sum.counts[id], id));
+      lines.push(`Accuracy ${sum.accuracy.toFixed(0)}%${slips.length ? ` · ${slips.join(", ")}` : " · no mistakes"}`);
+    }
+    lines.push(squares(g.pieces));
+    lines.push("Can you beat it?");
+    const outcome = await share(lines.join("\n"), link(this.dealHash));
+    this.say(...said(outcome, "your score"));
     this.render();
   }
 
@@ -324,6 +369,9 @@ export class PlayApp {
       case "a":
         this.openCoach();
         break;
+      case "l":
+        if (!this.replayName) this.shareScore();
+        break;
       case "b":
         this.showReview(this.movesOf("best") ? "best" : "yours", this.game.tiles.length);
         break;
@@ -420,6 +468,9 @@ export class PlayApp {
         break;
       case "c":
         this.recentre();
+        break;
+      case "l":
+        this.shareDeal();
         break;
       case "Escape":
         this.showHint = false;
@@ -751,7 +802,7 @@ export class PlayApp {
     }
     if (this.game.isOver()) {
       if (this.replayName) return [["Step through", "b", "primary"], info];
-      return [["Analysis", "a", "primary"], ["Best", "b"], ["New", "n"], ["Again", "r"], ["Board", "Escape"], info];
+      return [["Analysis", "a", "primary"], ["Share", "l"], ["Best", "b"], ["New", "n"], ["Again", "r"], info];
     }
     const hint = this.showHint && this.currentHint() ? ["Next", "g"] : ["Hint", "h"];
     return [["↺", "R"], ["↻", " "], hint, ["Place", "Enter", "primary"], ["Undo", "u"], ["New", "n"], info];
@@ -795,7 +846,8 @@ export class PlayApp {
     const turn = Math.min(n, g.placed() + (g.isOver() ? 0 : 1));
     const header =
       `<div>${ui.bold("NMBR 9", theme.ACCENT)}   ${ui.muted(`tile ${turn} of ${n}`)}</div>` +
-      `<div>Score ${ui.bold(g.score())}   ${ui.muted(`deal #${this.seed}`)}</div>`;
+      `<div>Score ${ui.bold(g.score())}   ${ui.muted(this.dealHash?.startsWith("play/t/") ? "a given deal" : `deal #${this.seed}`)}</div>` +
+      (this.replayName ? "" : `<div><button class="linkish" data-send="l">${g.isOver() ? "share your score" : "share this deal"}</button></div>`);
     let hand;
     const v = g.current();
     if (v != null) {
@@ -908,6 +960,7 @@ export class PlayApp {
     if (g.isOver()) {
       return [
         ["a", "game analysis", "a"],
+        ["l", "share your score", "l"],
         ["b", "review best play", "b"],
         ["n", "new game", "n"],
         ["r", "replay tiles", "r"],
@@ -924,6 +977,7 @@ export class PlayApp {
       ["u", "undo", "u"],
       ["tab", "view", "Tab"],
       ["?", "help", "?"],
+      ["l", "share this deal", "l"],
       ["n", "new game", "n"],
     ];
   }
@@ -981,6 +1035,7 @@ export class PlayApp {
     out += `<div class="gap"></div>`;
     out += actions([
       ...(a ? [["a", "game analysis"]] : []),
+      ["l", "share your score"],
       ["b", "review the best play"],
       ["n", "new game"],
       ["r", "replay these tiles"],

@@ -11,6 +11,7 @@ import { extent } from "./board.js";
 import { Hint } from "./hint.js";
 import * as theme from "./theme.js";
 import * as ui from "./ui.js";
+import { dealCode, link, said, share, squares } from "./share.js";
 
 const TILES = 20;
 const ROLLOUTS = 256;
@@ -153,6 +154,9 @@ export class CompanionApp extends PlayApp {
         case "b":
           if (this.done()) this.showReview(this.movesOf("best") ? "best" : "yours", TILES);
           break;
+        case "l":
+          if (this.done()) this.shareResult();
+          break;
         case "Tab":
         case "v":
           this.heightMap = !this.heightMap;
@@ -179,6 +183,20 @@ export class CompanionApp extends PlayApp {
     }
     if (used) this.render();
     return used;
+  }
+
+  /// Send someone how the game at the table went, with a link to play the
+  /// same cards online.
+  async shareResult() {
+    const ai = this.game.score();
+    const you = this.yourScore;
+    const lines = ["NMBR 9 at the table, against the engine"];
+    lines.push(you == null ? `The engine scored ${ai}` : `I scored ${you} · the engine ${ai}${you > ai ? " · I won!" : ""}`);
+    if (this.analysis?.best) lines.push(`Best found for these cards: ${this.analysis.best.score}`);
+    lines.push(squares(this.game.pieces), "Play the same cards:");
+    const outcome = await share(lines.join("\n"), link(`play/t/${dealCode(this.cards)}`));
+    this.say(...said(outcome, "the result"));
+    this.render();
   }
 
   recentre() {
@@ -327,7 +345,7 @@ export class CompanionApp extends PlayApp {
   touchButtons() {
     const info = ["Info", "info"];
     if (this.review) return super.touchButtons();
-    if (this.done()) return [["Review", "b", "primary"], ["New", "n"], ["Board", "Escape"], ["Undo", "u"], info];
+    if (this.done()) return [["Review", "b", "primary"], ["Share", "l"], ["New", "n"], ["Board", "Escape"], info];
     return [["Undo", "u"], [this.hidden ? "Show board" : "Hide board", "h"], ["New", "n"], info];
   }
 
@@ -336,6 +354,7 @@ export class CompanionApp extends PlayApp {
     if (this.done()) {
       return [
         ["b", "step through the engine's play", "b"],
+        ["l", "share the result", "l"],
         ["n", "new game", "n"],
         ["esc", "show/hide summary", "Escape"],
         ["u", "take back the last card", "u"],
@@ -371,6 +390,7 @@ export class CompanionApp extends PlayApp {
     } else out += `<div>${ui.muted("Searching for the best play of these cards…")}</div>`;
     out += `<div class="gap"></div><div class="actions">${[
       ["b", "step through the engine's play"],
+      ["l", "share the result"],
       ["n", "new game"],
       ["esc", "view board", "Escape"],
     ]

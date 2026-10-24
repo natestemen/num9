@@ -10,6 +10,7 @@ import { PlayApp, placementLine } from "./play.js";
 import { extent } from "./board.js";
 import * as theme from "./theme.js";
 import * as ui from "./ui.js";
+import { link, said, share, squares } from "./share.js";
 
 const STORE = "num9-challenges";
 
@@ -59,6 +60,22 @@ export class ChallengeApp extends PlayApp {
     this.deck = deck;
     this.opts.onDeck?.(deck);
     this.newGame();
+  }
+
+  /// Follow a link to a challenge.
+  route(arg) {
+    const deck = this.challenges.find((d) => d.id === arg);
+    if (deck && deck !== this.deck) this.choose(deck);
+  }
+
+  /// Send someone how you did, with a link to the same challenge.
+  async shareResult(score, pieces) {
+    const d = this.deck;
+    const of = d.proven ? `the most possible is ${d.target}` : `the best known is ${d.target}`;
+    const text = [`NMBR 9 challenge · ${d.name}`, `I scored ${score} (${of})`, squares(pieces), "Can you get there?"].join("\n");
+    const outcome = await share(text, link(`challenges/${d.id}`));
+    this.say(...said(outcome, "your score"));
+    this.render();
   }
 
   next() {
@@ -197,6 +214,9 @@ export class ChallengeApp extends PlayApp {
           break;
         case "d":
           this.next();
+          break;
+        case "l":
+          if (this.done()) this.shareResult(this.game.score(), this.game.pieces);
           break;
         case "n":
           if (this.placed() <= 1 || this.done() || pending === "n") this.newGame();
@@ -353,7 +373,7 @@ export class ChallengeApp extends PlayApp {
   touchButtons() {
     const info = ["Info", "info"];
     if (this.review) return [["◀", "ArrowLeft"], ["▶", "ArrowRight", "primary"], ["⏮", "Home"], ["⏭", "End"], ["Back", "Escape"], info];
-    if (this.done()) return [["Best play", "s", "primary"], ["Again", "n"], ["Next", "d"], ["Board", "Escape"], ["Undo", "u"], info];
+    if (this.done()) return [["Share", "l", "primary"], ["Best play", "s"], ["Again", "n"], ["Next", "d"], ["Board", "Escape"], info];
     if (this.holding != null) return [["↺", "R"], ["↻", " "], ["Place", "Enter", "primary"], ["Undo", "u"], ["Restart", "n"], info];
     return [["Undo", "u"], ["Restart", "n"], ["Answer", "s"], ["Next", "d"], info];
   }
@@ -362,6 +382,7 @@ export class ChallengeApp extends PlayApp {
     if (this.review) return [["←→", "step", "ArrowRight"], ["home/end", "first/last", "Home"], ["esc", "back", "Escape"]];
     if (this.done()) {
       return [
+        ["l", "share your score", "l"],
         ["s", "see a best play", "s"],
         ["n", "try again", "n"],
         ["d", "next challenge", "d"],
@@ -397,6 +418,7 @@ export class ChallengeApp extends PlayApp {
     out += `<div>${this.verdict()}</div>`;
     if (s > d.target) out += `<div>${ui.muted("That would be a new record: copy your play and share it.")}</div>`;
     out += `<div class="gap"></div><div class="actions">${[
+      ["l", "share your score"],
       ...(s > d.target ? [["copy", "copy your play"]] : []),
       ["s", "see a best play"],
       ["n", "try again"],

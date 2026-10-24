@@ -24,19 +24,19 @@ const openHelp = () => (help.hidden = false);
 help.addEventListener("click", () => (help.hidden = true));
 
 function route() {
-  const [name, arg] = location.hash.replace(/^#/, "").split("/");
-  return { name: screens.includes(name) ? name : "play", arg };
+  const [name, ...rest] = location.hash.replace(/^#/, "").split("/");
+  return { name: screens.includes(name) ? name : "play", arg: rest.join("/") || undefined };
 }
 
 async function create(name, arg) {
   const section = document.getElementById(name);
   if (name === "play") {
-    const seed = /^\d+$/.test(arg ?? "") ? Number(arg) >>> 0 : undefined;
-    return new PlayApp(section, engine, pool, {
-      seed,
+    const app = new PlayApp(section, engine, pool, {
       onHelp: openHelp,
-      onDeal: (s) => history.replaceState(null, "", `#play/${s}`),
+      onDeal: (hash) => history.replaceState(null, "", `#${hash}`),
     });
+    app.route(arg);
+    return app;
   }
   if (name === "companion") {
     return new CompanionApp(section, engine, pool, { onHelp: openHelp });
@@ -46,6 +46,7 @@ async function create(name, arg) {
     const picker = section.querySelector(".decks");
     // Each challenge: its name and target, and a tick once you've reached it.
     const mark = (deck) => {
+      history.replaceState(null, "", `#challenges/${deck.id}`);
       const bests = loadBests();
       picker.innerHTML = challenges
         .map((d, k) => {
@@ -64,6 +65,7 @@ async function create(name, arg) {
       const b = e.target.closest("button[data-k]");
       if (b) app.choose(challenges[b.dataset.k]);
     });
+    app.route(arg);
     mark(app.deck);
     return app;
   }
@@ -83,6 +85,7 @@ async function show() {
   for (const s of screens) document.getElementById(s).hidden = s !== name;
   for (const a of document.querySelectorAll("nav a")) a.classList.toggle("on", a.getAttribute("href") === `#${name}`);
   if (!(name in apps)) apps[name] = await create(name, arg);
+  else apps[name]?.route?.(arg); // a link followed while the screen is open
   active = apps[name];
   active?.render();
 }
