@@ -1,11 +1,12 @@
 //! Search for the highest-scoring play with NRPA:
 //!
-//!     cargo run --release --bin maxscore -- [--free | --tiles 0,0,1,1,...]
+//!     cargo run --release --bin maxscore -- [--free | --counts 2,2,1,... | --tiles 0,0,1,1,...]
 //!         [--level 3] [--iterations 100] [--alpha 1.0] [--threads N]
 //!         [--seed S] [--out best.txt]
 //!
 //! With --free the order of the tiles is chosen too (the "maximum possible
-//! score" question). Runs one independent search per thread, prints every
+//! score" question); --counts does the same for a smaller deck, with that
+//! many tiles of each value from 0 up. Runs one independent search per thread, prints every
 //! new best as it is found, and writes the best play to --out.
 
 use std::sync::mpsc::channel;
@@ -16,7 +17,7 @@ use num9_core::nrpa::{verify, Nrpa, Order, Play};
 
 fn usage() -> ! {
     eprintln!(
-        "usage: maxscore [--free | --tiles a,b,...] [--level L] [--iterations N] [--alpha A] [--edge-bias E] [--height-bias H] \
+        "usage: maxscore [--free | --counts a,b,... | --tiles a,b,...] [--level L] [--iterations N] [--alpha A] [--edge-bias E] [--height-bias H] \
          [--threads T] [--seed S] [--out FILE]"
     );
     std::process::exit(2)
@@ -63,6 +64,16 @@ fn main() {
                         .map(|t| t.trim().parse().unwrap_or_else(|_| usage()))
                         .collect(),
                 )
+            }
+            "--counts" => {
+                let mut counts = [0u8; 10];
+                for (v, c) in value.split(',').enumerate() {
+                    if v >= 10 {
+                        usage();
+                    }
+                    counts[v] = c.trim().parse().unwrap_or_else(|_| usage());
+                }
+                order = Order::Free(counts);
             }
             "--level" => nrpa.level = num(),
             "--iterations" => nrpa.iterations = num(),
