@@ -229,6 +229,8 @@ export class PlayApp {
     try {
       const played = await this.background.run({ type: "play", tiles, seed: this.seed });
       this.rival = { score: played.score, moves: played.moves };
+      // The engine's game is a play of this deal too: the best found so far.
+      this.analysis.best = { score: played.score, moves: played.moves };
       this.render();
     } catch {
       return; // stopped (new game or undo)
@@ -239,7 +241,7 @@ export class PlayApp {
   /// Search for the best play of the finished deal, in stages, showing each
   /// improvement.
   async searchBestPlay() {
-    this.analysis = { best: null, stagesDone: 0, stages: STAGES.length };
+    this.analysis = { best: this.analysis?.best ?? null, stagesDone: 0, stages: STAGES.length };
     try {
       await this.background.run({ type: "analyze", tiles: this.game.tiles, stages: STAGES }, (m) => {
         if (!this.analysis) return;
