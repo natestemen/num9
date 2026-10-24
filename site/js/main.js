@@ -5,11 +5,11 @@ import { Engine } from "./engine.js";
 import { geometry } from "./game.js";
 import { Pool } from "./workers.js";
 import { PlayApp } from "./play.js";
-import { PuzzleApp, DECKS } from "./puzzles.js";
+import { ChallengeApp, loadBests } from "./challenges.js";
 import { RecordsApp } from "./records.js";
 import { CompanionApp } from "./companion.js";
 
-const screens = ["play", "companion", "puzzles", "records", "about"];
+const screens = ["play", "companion", "challenges", "records", "about"];
 const apps = {};
 let active = null;
 let engine;
@@ -38,18 +38,26 @@ async function create(name, arg) {
   if (name === "companion") {
     return new CompanionApp(section, engine, pool, { onHelp: openHelp });
   }
-  if (name === "puzzles") {
+  if (name === "challenges") {
+    const { challenges } = await (await fetch("data/challenges.json")).json();
     const picker = section.querySelector(".decks");
-    picker.innerHTML = DECKS.map((d, k) => `<button data-k="${k}">${d.name}</button>`).join("");
+    // Each challenge: its name and target, and a tick once you've reached it.
     const mark = (deck) => {
-      for (const b of picker.querySelectorAll("button")) b.classList.toggle("on", DECKS[b.dataset.k] === deck);
+      const bests = loadBests();
+      picker.innerHTML = challenges
+        .map((d, k) => {
+          const best = bests[d.id];
+          const done = best != null && best >= d.target ? " ✓" : "";
+          return `<button data-k="${k}" class="${d === deck ? "on" : ""}">${d.name} · ${d.target}${done}</button>`;
+        })
+        .join("");
     };
-    const app = new PuzzleApp(section, engine, pool, { onHelp: openHelp, onDeck: mark });
+    const app = new ChallengeApp(section, engine, pool, { onHelp: openHelp, onDeck: mark, challenges });
     picker.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-k]");
-      if (b) app.chooseDeck(DECKS[b.dataset.k]);
+      if (b) app.choose(challenges[b.dataset.k]);
     });
-    mark(DECKS[0]);
+    mark(app.deck);
     return app;
   }
   if (name === "records") {

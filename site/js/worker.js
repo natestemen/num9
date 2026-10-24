@@ -1,6 +1,6 @@
 // A web worker with its own copy of the engine, for work that would freeze
 // the page: hint rollouts, the engine playing a deal, the search for the
-// best play, and exact puzzle values. Each request carries an id that its
+// best play. Each request carries an id that its
 // replies repeat.
 
 import { Engine } from "./engine.js";
@@ -27,16 +27,6 @@ const handlers = {
       postMessage({ id: m.id, type: "stage", stage: k + 1, best });
     }
     return best;
-  },
-  exactInit(e, m) {
-    e.exactInit(m.deck, new Uint8Array(m.table));
-    return {};
-  },
-  exact(e, m) {
-    e.load(m.pieces);
-    const before = e.exactValue();
-    const placements = m.value == null ? [] : e.exactPlacements(m.value);
-    return { before, placements };
   },
 };
 

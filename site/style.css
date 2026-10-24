@@ -490,7 +490,13 @@ section[hidden] {
   white-space: normal;
 }
 
-/* Puzzles and records. */
+/* Challenges: the tile you're holding. */
+.tray button.held {
+  outline: 3px solid var(--fg);
+  outline-offset: 2px;
+}
+
+/* Challenges and records. */
 .decks {
   display: flex;
   flex-wrap: wrap;

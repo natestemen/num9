@@ -18,7 +18,7 @@
       <nav>
         <a href="#play">Play</a>
         <a href="#companion">Companion</a>
-        <a href="#puzzles">Puzzles</a>
+        <a href="#challenges">Challenges</a>
         <a href="#records">Records</a>
         <a href="#about">About</a>
       </nav>
@@ -34,11 +34,12 @@
           so far. Hide its board with <kbd>h</kbd> if you'd rather not peek, and enter your score at the end to see who won.
         </p>
       </section>
-      <section id="puzzles" hidden>
+      <section id="challenges" hidden>
         <p class="intro">
-          Small decks, solved exactly: every position has been worked out, so each move can be judged against
-          <em>perfect play</em>, which earns the highest final score on average without knowing what comes next.
-          Press <kbd>h</kbd> to see the best moves, or play and find out what you gave away.
+          All the tiles are yours from the start: place them in any order and get as close as you can to the most the deck
+          allows. For the small decks that maximum is <em>proven</em> (every position was searched); for the bigger ones it is
+          the best the engine has found, so beating it would be a new record. Pick a tile with its number or by tapping it, and
+          press <kbd>s</kbd> to see a best play.
         </p>
         <div class="decks"></div>
       </section>
@@ -97,8 +98,8 @@
           <h2>Small decks, solved</h2>
           <p>
             With only a few tiles the whole game can be searched: every reachable position, counting stacks that differ by sliding
-            or turning as the same. That gives the exact value of perfect play. The <a href="#puzzles">Puzzles</a> use these
-            solutions.
+            or turning as the same. That gives the exact value of perfect play, and the most each deck can score with the order
+            chosen freely, which the <a href="#challenges">Challenges</a> ask you to reach.
           </p>
           <table>
             <thead>
@@ -146,6 +147,7 @@
             <dt>a</dt><dd>after a game: go through it move by move with the engine's verdict on each (m jumps to the next mistake, r retries a move)</dd>
             <dt>b</dt><dd>after a game: step through the best play found</dd>
             <dt>n</dt><dd>new game</dd>
+            <dt>0-9</dt><dd>in Challenges: pick a tile of that number (s shows a best play, d goes to the next)</dd>
           </dl>
           <p><b>Reading the board</b></p>
           <p>

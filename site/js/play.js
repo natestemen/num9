@@ -714,8 +714,8 @@ export class PlayApp {
     const h = this.showHint ? this.currentHint() : null;
     const pick = h?.ranking()[this.suggestion];
     if (pick) {
-      const digits = h.digits ?? 1;
-      const exp = Number.isNaN(pick.expected) ? "" : ` ${h.exact ? "=" : "≈"} ${pick.expected.toFixed(digits)}`;
+      const digits = 1;
+      const exp = Number.isNaN(pick.expected) ? "" : ` ≈ ${pick.expected.toFixed(digits)}`;
       line2 = ui.span(`▸ ${this.suggestion + 1}. ${describe(h.value, pick.move).trim()}${exp}`, `color:${theme.HINT};font-weight:700`);
       const yours = h.yoursRated();
       if (yours && sameMove(this.ghostMove(), h.askedAt) && yours.rank > 1) {
@@ -820,15 +820,15 @@ export class PlayApp {
       return `${ui.bold("h", theme.ACCENT)} ${ui.muted("ask the engine")}`;
     }
     let out;
-    const digits = h.digits ?? 1;
+    const digits = 1;
     if (h.forced()) out = `<div>${ui.muted("Only one way to place it")}</div>`;
-    else if (h.finished()) out = `<div>${ui.muted(h.label ?? "Expected final score")}</div>`;
+    else if (h.finished()) out = `<div>${ui.muted("Expected final score")}</div>`;
     else out = gauge(h.progress(), `thinking… ${Math.round(h.progress() * 100)}%`);
     const ranking = h.ranking();
     ranking.slice(0, SUGGESTIONS).forEach((r, k) => {
       const shown = k === this.suggestion;
       const style = shown ? `color:${theme.HINT};font-weight:700` : "";
-      const exp = Number.isNaN(r.expected) ? "" : `${h.exact ? "=" : "≈"} ${r.expected.toFixed(digits).padStart(5)}`;
+      const exp = Number.isNaN(r.expected) ? "" : `≈ ${r.expected.toFixed(digits).padStart(5)}`;
       out += `<div class="row" data-send="${k + 1}">${ui.span(`${shown ? "▸ " : "  "}${k + 1}. ${describe(h.value, r.move)}${exp}`, style)}</div>`;
     });
     const ghost = this.ghostMove();
@@ -837,7 +837,7 @@ export class PlayApp {
       const gap = ranking[0].expected - yours.expected;
       const verdict =
         yours.rank === 1 ? ui.bold(" best!", theme.GOOD) : ui.span(` −${gap.toFixed(digits)}`, `color:${gap < 1 ? theme.GOOD : theme.BAD}`);
-      const exp = `${h.exact ? "=" : "≈"} ${yours.expected.toFixed(digits).padStart(5)}`;
+      const exp = `≈ ${yours.expected.toFixed(digits).padStart(5)}`;
       out += `<div class="gap"></div><div>${ui.esc(`  You ${`#${yours.rank}`.padEnd(4)}${describe(h.value, yours.move)}${exp}`)}${verdict}</div>`;
     } else if (ghost && !ranking.slice(0, SUGGESTIONS).some((r) => sameMove(r.move, ghost))) {
       out += `<div class="gap"></div><div>  ${ui.bold("h", theme.ACCENT)} ${ui.muted("rate the spot you're on")}</div>`;

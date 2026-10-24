@@ -124,29 +124,4 @@ export class Engine {
     const score = this.x.analyze(level, perLayer, seed >>> 0);
     return { score, moves: decodeMoves(this.output()) };
   }
-
-  exactInit(deck, table) {
-    const bytes = new Uint8Array(10 + table.length);
-    bytes.set(deck);
-    bytes.set(table, 10);
-    this.write(bytes);
-    this.x.exact_init();
-  }
-
-  exactValue() {
-    return this.x.exact_value();
-  }
-
-  /// [{move, expected}] for each distinct placement of `value`.
-  exactPlacements(value) {
-    const n = this.x.exact_placements(value);
-    const b = this.output();
-    const view = new DataView(b.buffer);
-    const out = [];
-    for (let k = 0; k < n; k++) {
-      const [move] = decodeMoves(b.subarray(12 * k, 12 * k + 4));
-      out.push({ move, expected: view.getFloat64(12 * k + 4, true) });
-    }
-    return out;
-  }
 }
