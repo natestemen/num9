@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 
 use crate::board::{Board, Move};
-use crate::piece::shape;
+use crate::encode::distinct_moves;
 use crate::rng::Rng;
 
 /// A placement of a tile: its value and where it goes.
@@ -90,17 +90,6 @@ impl Play {
 }
 
 type Policy = HashMap<u64, f64>;
-
-/// The distinct legal placements of `value` (pieces 0 and 8 look the same
-/// under rotations r and r + 2; only the first is kept).
-fn distinct_moves(board: &Board, value: u8) -> Vec<Move> {
-    let half_turn = shape(value, 0).rows == shape(value, 2).rows;
-    let mut moves = board.find_valid_moves(value);
-    if half_turn {
-        moves.retain(|m| m.rot < 2);
-    }
-    moves
-}
 
 fn code((value, m): Step) -> u64 {
     (value as u64)
