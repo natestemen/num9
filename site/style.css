@@ -607,6 +607,24 @@ section[hidden] {
   gap: 0.6ch;
 }
 
+#challenges .decks {
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.deck-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6ch;
+}
+
+.deck-size {
+  min-width: 7ch;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
 .decks button,
 .record-list button {
   padding: 0.2rem 1ch;
@@ -984,6 +1002,21 @@ button {
 
   .cards button small {
     font-size: 0.95em;
+  }
+
+  /* One strip to scroll sideways, sizes and all. */
+  #challenges .decks {
+    flex-direction: row;
+  }
+
+  .deck-row {
+    display: contents;
+  }
+
+  .deck-size {
+    min-width: auto;
+    white-space: nowrap;
+    padding-left: 0.6ch;
   }
 
   .decks {

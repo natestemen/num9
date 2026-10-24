@@ -48,13 +48,16 @@ async function create(name, arg) {
     const mark = (deck) => {
       history.replaceState(null, "", `#challenges/${deck.id}`);
       const bests = loadBests();
-      picker.innerHTML = challenges
-        .map((d, k) => {
-          const best = bests[d.id];
-          const done = best != null && best >= d.target ? " ✓" : "";
-          return `<button data-k="${k}" class="${d === deck ? "on" : ""}">${d.name} · ${d.target}${done}</button>`;
-        })
-        .join("");
+      // A row for each size of deck.
+      const rows = new Map();
+      challenges.forEach((d, k) => {
+        const best = bests[d.id];
+        const done = best != null && best >= d.target ? " ✓" : "";
+        const n = d.counts.reduce((a, b) => a + b, 0);
+        const row = rows.get(n) ?? `<span class="deck-size">${n} tiles</span>`;
+        rows.set(n, row + `<button data-k="${k}" class="${d === deck ? "on" : ""}">${d.name} · ${d.target}${done}</button>`);
+      });
+      picker.innerHTML = [...rows.values()].map((r) => `<div class="deck-row">${r}</div>`).join("");
     };
     // With a mouse and room, every tile starts on the board to be arranged
     // freely; on phones, tiles are picked from a tray and placed in turn.
