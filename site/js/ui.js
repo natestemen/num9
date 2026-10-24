@@ -99,6 +99,19 @@ export function levelLines(levels) {
     .join("");
 }
 
+/// The tiles still to come, drawn: each value's shape once per copy, with
+/// the copies already gone drawn faint (`left[v]` of `counts[v]` remain).
+export function bagShapes(left, counts = Array(10).fill(2)) {
+  let html = `<div class="bag">`;
+  for (let v = 0; v < 10; v++) {
+    if (!counts[v]) continue;
+    const copies = Array.from({ length: counts[v] }, (_, k) => tileShape(v, 0, k < left[v] ? "" : "used")).join("");
+    const color = left[v] ? theme.valueCss(v) : theme.MUTED;
+    html += `<div class="bag-v${left[v] ? "" : " gone"}">${bold(v, color)}${copies}</div>`;
+  }
+  return html + "</div>";
+}
+
 /// The tiles still to come, as dots.
 export function bagLines(counts, copies = 2) {
   const line = (from, to) =>

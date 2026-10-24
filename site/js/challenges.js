@@ -285,7 +285,10 @@ export class ChallengeApp extends PlayApp {
           const rgb = theme.tileRgb(v);
           const held = this.holding === v ? " held" : "";
           const dots = "●".repeat(Math.max(0, n)) + "○".repeat(Math.max(0, c - n));
-          return `<button class="${held}" data-card="${v}" ${n > 0 && !this.solution ? "" : "disabled"} style="background:${theme.css(rgb)};color:${theme.textOn(rgb)}"><b>${v}</b><small>${dots}</small></button>`;
+          // Phones show the number and dots; wider screens the shapes, one
+          // per copy (those already placed drawn faint).
+          const shapes = Array.from({ length: c }, (_, k) => ui.tileShape(v, 0, k < n ? "" : "used")).join("");
+          return `<button class="${held}" data-card="${v}" ${n > 0 && !this.solution ? "" : "disabled"} style="--c:${theme.css(rgb)};--t:${theme.textOn(rgb)}"><b>${v}</b><small>${dots}</small><span class="shapes">${shapes}</span></button>`;
         })
         .join("");
   }

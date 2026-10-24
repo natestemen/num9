@@ -298,7 +298,7 @@ export class CompanionApp extends PlayApp {
     return (
       ui.box("Companion", `<div class="wrap">${intro}</div><div class="gap"></div><div>${this.facts()}</div>`) +
       ui.box("Latest card", `<div>${this.lastLine() || "&nbsp;"}</div>`) +
-      ui.box("Still in the deck", ui.bagLines(this.inDeck())) +
+      ui.box("Still in the deck", ui.bagLines(this.inDeck()) + ui.bagShapes(this.inDeck())) +
       ui.box("Engine's levels", levels, "grow") +
       this.messageLine()
     );

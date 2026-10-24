@@ -806,7 +806,7 @@ export class PlayApp {
     return (
       ui.box("Game", header) +
       ui.box("Tile in hand", hand) +
-      ui.box("Still to come", ui.bagLines(g.stillToCome())) +
+      ui.box("Still to come", ui.bagLines(g.stillToCome()) + ui.bagShapes(g.stillToCome())) +
       ui.box("Levels", ui.levelLines(g.levels()) || "&nbsp;", "grow") +
       ui.box("Best move", this.hintBody()) +
       this.messageLine()

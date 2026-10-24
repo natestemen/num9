@@ -490,6 +490,80 @@ section[hidden] {
   white-space: normal;
 }
 
+/* The tiles still to come, drawn (dots on phones instead). */
+.bag {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1.2ch;
+  margin-top: 0.4rem;
+  white-space: normal;
+}
+
+.bag-v {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35ch;
+}
+
+.bag-v b {
+  min-width: 1ch;
+}
+
+.bag .shape i {
+  width: 0.32rem;
+  height: 0.32rem;
+}
+
+.shape.used i[style] {
+  opacity: 0.18;
+}
+
+.panel .box-body > div:has(+ .bag),
+.panel .box-body > div:has(+ div + .bag) {
+  display: none;
+}
+
+/* The challenge tray: on wider screens each number with its shapes, on
+   phones (below) a coloured button with dots. */
+.tray button {
+  background: rgb(26, 29, 36);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 0.5ch;
+  padding: 0.35rem 0.9ch;
+}
+
+.tray button b {
+  color: var(--c);
+  align-self: center;
+}
+
+.tray button small {
+  display: none;
+}
+
+.tray .shapes {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4ch;
+}
+
+.tray .shape i {
+  width: 0.6rem;
+  height: 0.6rem;
+}
+
+.tray button:not(:disabled):hover {
+  border-color: var(--c);
+}
+
+.tray button.held {
+  border-color: var(--c);
+  background: rgb(40, 44, 54);
+}
+
 /* Challenges: the tile you're holding. */
 .tray button.held {
   outline: 3px solid var(--fg);
@@ -819,6 +893,37 @@ button {
 
   .popup .actions {
     display: none; /* the buttons below do the same */
+  }
+
+  /* No room for shapes on phones: dots instead, and coloured buttons. */
+  .bag {
+    display: none;
+  }
+
+  .panel .box-body > div:has(+ .bag),
+  .panel .box-body > div:has(+ div + .bag) {
+    display: block;
+  }
+
+  .tray button {
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    background: var(--c);
+    color: var(--t);
+    border: none;
+  }
+
+  .tray button b {
+    color: var(--t);
+  }
+
+  .tray button small {
+    display: inline;
+  }
+
+  .tray .shapes {
+    display: none;
   }
 
   /* The card buttons in two rows of five, big enough to tap easily. */
