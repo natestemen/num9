@@ -5,7 +5,7 @@ but in rust, driven from python
 The engine (board, move generation, scoring) and all strategies live in
 `rust/` and are exposed to Python as `num9_core`. They started as a Python
 package; the Rust port reproduces it exactly and is roughly 2,000–3,000×
-faster (see [history](#history)).
+faster.
 
 ## setup
 
@@ -103,50 +103,21 @@ documents how they were made).
 <!-- benchmarks:start -->
 | strategy | games | avg | median | min | max | time (s) | games/s |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| place_randomly | 1000 | 1.10 | 0.00 | 0 | 15 | 0.15 | 6838.79 |
-| go_up_randomly | 1000 | 14.90 | 13.00 | 1 | 57 | 0.13 | 7438.11 |
-| edges_then_up | 1000 | 56.78 | 55.00 | 23 | 97 | 0.16 | 6142.68 |
-| solid_base_high_top | 1000 | 48.93 | 47.00 | 14 | 107 | 0.21 | 4686.81 |
-| maximize_lookahead | 1000 | 60.21 | 59.00 | 30 | 113 | 64.98 | 15.39 |
+| place_randomly | 1000 | 1.10 | 0.00 | 0 | 15 | 0.09 | 10737.16 |
+| go_up_randomly | 1000 | 14.90 | 13.00 | 1 | 57 | 0.10 | 10129.40 |
+| edges_then_up | 1000 | 56.78 | 55.00 | 23 | 97 | 0.12 | 8046.98 |
+| solid_base_high_top | 1000 | 48.93 | 47.00 | 14 | 107 | 0.16 | 6111.65 |
+| maximize_lookahead | 1000 | 60.21 | 59.00 | 30 | 113 | 51.36 | 19.47 |
+| low_to_base | 1000 | 62.74 | 61.00 | 33 | 115 | 0.12 | 8029.16 |
+| monte_carlo | 1000 | 86.41 | 86.00 | 54 | 142 | 505.86 | 1.98 |
+| keep_support | 1000 | 64.78 | 63.00 | 35 | 125 | 0.70 | 1419.30 |
 <!-- benchmarks:end -->
-
-### keep_support
 
 `keep_support` is `low_to_base` (low tiles on the ground, the rest as high
 as they go, snuggest spot first) with one more thing to weigh when a tile
 goes up: the support it strands. A tile on level L can leave cells of level
 L-1 that no tile still to come could ever rest on (pockets too small or the
 wrong shape, or on a single tile); `num9_core::support` counts them, and
-spots on the level score `edges touching - 0.15 × cells stranded`. On the
-same 10,000 deals:
-
-| strategy | avg | vs low_to_base | wins / ties / losses |
-| --- | --- | --- | --- |
-| low_to_base | 62.69 | | |
-| keep_support | 65.10 | +2.41 ± 0.13 | 4597 / 2164 / 3239 |
-
-Weights from 0.1 to 0.25 do about as well; making stranding the main
-criterion gains only about +0.6, and even using it just to break ties
-between equally snug spots gains +2.06. It plays about 6,500 games a
-second (`low_to_base` about 33,000).
-
-## history
-
-The engine was first written in Python (`num9/`, removed after the port;
-see the git history). Its last benchmark, 100 games per strategy:
-
-| strategy | games | avg | median | min | max | time (s) | games/s |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| place_randomly | 100 | 1.05 | 0.00 | 0 | 9 | 272.12 | 0.37 |
-| go_up_randomly | 100 | 15.49 | 12.00 | 2 | 44 | 174.16 | 0.57 |
-| edges_then_up | 100 | 58.13 | 57.00 | 36 | 97 | 152.75 | 0.65 |
-| solid_base_high_top | 100 | 50.37 | 50.00 | 26 | 81 | 210.58 | 0.47 |
-
-Head-to-head on the same 8-core machine, before the Python engine was removed:
-
-| | Python | Rust (via Python) | speedup |
-| --- | --- | --- | --- |
-| `find_valid_moves` | 103 ms / call | 44 µs / call | ~2,400× |
-| edges_then_up game | 0.48 games/s | 1,167 games/s (4,192 on 8 threads) | ~2,400× |
-| solid_base_high_top game | 0.40 games/s | 1,151 games/s (4,039 on 8 threads) | ~2,900× |
-| maximize_lookahead game | ~47 min / game (est.) | 1.2 games/s | ~3,300× |
+spots on the level score `edges touching - 0.15 × cells stranded`. Played
+on the same 10,000 deals as `low_to_base`, it scores +2.41 ± 0.13 more a
+game, winning 46% of them and losing 32%.
