@@ -110,6 +110,26 @@ documents how they were made).
 | maximize_lookahead | 1000 | 60.21 | 59.00 | 30 | 113 | 64.98 | 15.39 |
 <!-- benchmarks:end -->
 
+### keep_support
+
+`keep_support` is `low_to_base` (low tiles on the ground, the rest as high
+as they go, snuggest spot first) with one more thing to weigh when a tile
+goes up: the support it strands. A tile on level L can leave cells of level
+L-1 that no tile still to come could ever rest on (pockets too small or the
+wrong shape, or on a single tile); `num9_core::support` counts them, and
+spots on the level score `edges touching - 0.15 × cells stranded`. On the
+same 10,000 deals:
+
+| strategy | avg | vs low_to_base | wins / ties / losses |
+| --- | --- | --- | --- |
+| low_to_base | 62.69 | | |
+| keep_support | 65.10 | +2.41 ± 0.13 | 4597 / 2164 / 3239 |
+
+Weights from 0.1 to 0.25 do about as well; making stranding the main
+criterion gains only about +0.6, and even using it just to break ties
+between equally snug spots gains +2.06. It plays about 6,500 games a
+second (`low_to_base` about 33,000).
+
 ## history
 
 The engine was first written in Python (`num9/`, removed after the port;

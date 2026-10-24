@@ -72,4 +72,13 @@ mod tests {
         let s = Strategy::EdgesThenUp;
         assert_eq!(play_games(&s, 12, 7, 1), play_games(&s, 12, 7, 4));
     }
+
+    #[test]
+    fn keep_support_beats_low_to_base_on_the_same_deals() {
+        let games = 500;
+        let base = play_games(&Strategy::from_name("low_to_base").unwrap(), games, 7, 4);
+        let ours = play_games(&Strategy::from_name("keep_support").unwrap(), games, 7, 4);
+        let gain = ours.iter().zip(&base).map(|(a, b)| a - b).sum::<i64>() as f64 / games as f64;
+        assert!(gain > 1.0, "keep_support gained only {gain:.2} a game");
+    }
 }

@@ -109,10 +109,12 @@ impl Strategy {
                 endgame: 4,
             },
             "monte_carlo" => Strategy::MonteCarlo(MonteCarlo::default()),
+            // Weights from 0.1 to 0.25 do about equally well; stranding as
+            // the main criterion (a large weight) gains much less.
             "keep_support" => Strategy::KeepSupport {
                 max_low: 4,
                 endgame: 4,
-                weight: 1.0,
+                weight: 0.15,
             },
             _ => return None,
         })
