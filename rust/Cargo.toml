@@ -13,6 +13,10 @@ name = "brute"
 path = "src/bin/brute.rs"
 
 [[bin]]
+name = "freemax"
+path = "src/bin/freemax.rs"
+
+[[bin]]
 name = "bench"
 path = "src/bin/bench.rs"
 

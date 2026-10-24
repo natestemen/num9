@@ -88,7 +88,7 @@ pub fn key(board: &Board) -> u128 {
 
 /// Keys are already hashes: use their high half as is.
 #[derive(Default)]
-struct Prehashed(u64);
+pub(crate) struct Prehashed(u64);
 
 impl Hasher for Prehashed {
     fn finish(&self) -> u64 {
@@ -102,7 +102,7 @@ impl Hasher for Prehashed {
     }
 }
 
-type Table<V> = HashMap<u128, V, BuildHasherDefault<Prehashed>>;
+pub(crate) type Table<V> = HashMap<u128, V, BuildHasherDefault<Prehashed>>;
 
 /// A stored position: expected and best scores, and tiles placed.
 type Stored = (f64, i16, u8);
