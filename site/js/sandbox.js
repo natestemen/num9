@@ -89,8 +89,7 @@ export class SandboxApp {
   /// Send someone how you did, with a link to the same challenge.
   async shareResult(score, pieces) {
     const d = this.deck;
-    const of = d.proven ? `the most possible is ${d.target}` : `the best known is ${d.target}`;
-    const text = [`NMBR 9 challenge · ${d.name}`, `I scored ${score} (${of})`, squares(pieces), "Can you get there?"].join("\n");
+    const text = [`NMBR 9 challenge · ${d.name}`, `I scored ${score} (the most possible is ${d.target})`, squares(pieces), "Can you get there?"].join("\n");
     const outcome = await share(text, link(`challenges/${d.id}`));
     this.say(...said(outcome, "your score"));
     this.render();
@@ -331,11 +330,6 @@ export class SandboxApp {
     return this.tiles.reduce((s, t) => s + t.value * t.layer, 0);
   }
 
-  playText() {
-    const moves = this.result.steps.map((t) => `${t.value}@${t.layer}:${t.i}:${t.j}:${t.rot}`).join(" ");
-    return `score ${this.result.score}\nmoves (value@layer:row:col:rotation) ${moves}\n`;
-  }
-
   // --------------------------------------------------------------------
   // Input
 
@@ -402,12 +396,6 @@ export class SandboxApp {
           break;
         case "?":
           this.opts.onHelp?.();
-          break;
-        case "copy":
-          navigator.clipboard?.writeText(this.playText()).then(
-            () => this.say("Copied your play", "good"),
-            () => this.say("Couldn't copy", "bad"),
-          );
           break;
         default:
           used = false;
@@ -524,7 +512,7 @@ export class SandboxApp {
 
   targetLine() {
     const d = this.deck;
-    return d.proven ? `${ui.muted("the most possible:")} ${ui.bold(d.target)}` : `${ui.muted("best known:")} ${ui.bold(d.target)}`;
+    return `${ui.muted("the most possible:")} ${ui.bold(d.target)}`;
   }
 
   panel(problems) {
@@ -581,16 +569,13 @@ export class SandboxApp {
     const s = this.result.score;
     const t = d.target;
     let verdict;
-    if (s > t) verdict = ui.bold(`${s}: you beat the best known!`, theme.GOOD);
-    else if (s === t) verdict = ui.bold(d.proven ? "Perfect: the most possible!" : "You matched the best known!", theme.GOOD);
-    else verdict = `${ui.muted(`${Math.round((100 * s) / t)}% of the ${d.proven ? "maximum" : "best known"}`)}`;
+    if (s >= t) verdict = ui.bold("Perfect: the most possible!", theme.GOOD);
+    else verdict = `${ui.muted(`${Math.round((100 * s) / t)}% of the maximum`)}`;
     let out = `<div class="box-title">${ui.esc(d.name)}</div>`;
-    out += `<div>Your score  ${ui.bold(s, theme.ACCENT)}  ${ui.muted(`(${d.proven ? "the most possible" : "best known"} is ${t})`)}</div><div class="gap"></div>`;
+    out += `<div>Your score  ${ui.bold(s, theme.ACCENT)}  ${ui.muted(`(the most possible is ${t})`)}</div><div class="gap"></div>`;
     out += ui.levelLines(levels(this.result.steps)) + `<div class="gap"></div><div>${verdict}</div>`;
-    if (s > t) out += `<div>${ui.muted("That would be a new record: copy your play and share it.")}</div>`;
     out += `<div class="gap"></div><div class="actions">${[
       ["l", "share your score"],
-      ...(s > t ? [["copy", "copy your play"]] : []),
       ["s", "see a best play"],
       ["esc", "keep building", "Escape"],
       ["n", "start over"],

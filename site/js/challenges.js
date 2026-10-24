@@ -1,9 +1,8 @@
 // Challenges: every tile of a deck is yours from the start, to place in any
-// order you like, and the goal is the highest score the deck allows. For the
-// small decks that maximum is proven (the exact solver searched every
-// position); for bigger ones it is the best the engine's searches have
-// found, and beating it would be a new record. Each challenge comes with a
-// best play to step through once you've had a go.
+// order you like, and the goal is the highest score the deck allows. That
+// maximum is proven: an exhaustive search (num9_core::freeorder) tried
+// every stack, and gives a play reaching it to step through once you've had
+// a go.
 
 import { Game, TopView, parsePlay } from "./game.js";
 import { PlayApp, placementLine } from "./play.js";
@@ -36,7 +35,7 @@ export function saveBest(id, s) {
 }
 
 export class ChallengeApp extends PlayApp {
-  /// `opts.challenges`: [{id, name, counts, target, proven, play}].
+  /// `opts.challenges`: [{id, name, counts, target, play}].
   constructor(section, engine, pool, opts) {
     super(section, engine, pool, opts);
   }
@@ -71,8 +70,7 @@ export class ChallengeApp extends PlayApp {
   /// Send someone how you did, with a link to the same challenge.
   async shareResult(score, pieces) {
     const d = this.deck;
-    const of = d.proven ? `the most possible is ${d.target}` : `the best known is ${d.target}`;
-    const text = [`NMBR 9 challenge · ${d.name}`, `I scored ${score} (${of})`, squares(pieces), "Can you get there?"].join("\n");
+    const text = [`NMBR 9 challenge · ${d.name}`, `I scored ${score} (the most possible is ${d.target})`, squares(pieces), "Can you get there?"].join("\n");
     const outcome = await share(text, link(`challenges/${d.id}`));
     this.say(...said(outcome, "your score"));
     this.render();
@@ -179,12 +177,6 @@ export class ChallengeApp extends PlayApp {
     if (this.game) this.view.centre(extent(this.game.pieces));
   }
 
-  /// The player's play in the records' format (to share a new best).
-  playText() {
-    const moves = this.game.pieces.map((p) => `${p.value}@${p.layer}:${p.i}:${p.j}:${p.rot}`).join(" ");
-    return `score ${this.game.score()}\nmoves (value@layer:row:col:rotation) ${moves}\n`;
-  }
-
   onKey(e) {
     const key = e.key;
     const pending = this.confirm;
@@ -194,12 +186,7 @@ export class ChallengeApp extends PlayApp {
     else if (this.solution && (key === "Escape" || key === "s")) this.hideSolution();
     else if (this.review) used = this.onReviewKey(key);
     else if (/^[0-9]$/.test(key)) this.pick(Number(key));
-    else if (key === "copy") {
-      navigator.clipboard?.writeText(this.playText()).then(
-        () => this.say("Copied your play", "good"),
-        () => this.say("Couldn't copy", "bad"),
-      );
-    } else {
+    else {
       switch (key) {
         case "u":
         case "Backspace":
@@ -315,7 +302,7 @@ export class ChallengeApp extends PlayApp {
 
   targetLine() {
     const d = this.deck;
-    return d.proven ? `${ui.muted("the most possible:")} ${ui.bold(d.target)}` : `${ui.muted("best known:")} ${ui.bold(d.target)}`;
+    return `${ui.muted("the most possible:")} ${ui.bold(d.target)}`;
   }
 
   panel() {
@@ -365,9 +352,8 @@ export class ChallengeApp extends PlayApp {
   verdict() {
     const s = this.game.score();
     const t = this.deck.target;
-    if (s > t) return ui.bold(`${s}: you beat the best known!`, theme.GOOD);
-    if (s === t) return ui.bold(this.deck.proven ? `${s}: perfect, the most possible!` : `${s}: you matched the best known!`, theme.GOOD);
-    return `${ui.bold(s)} ${ui.muted(`of ${t}: ${Math.round((100 * s) / t)}% of the ${this.deck.proven ? "maximum" : "best known"}`)}`;
+    if (s >= t) return ui.bold(`${s}: perfect, the most possible!`, theme.GOOD);
+    return `${ui.bold(s)} ${ui.muted(`of ${t}: ${Math.round((100 * s) / t)}% of the maximum`)}`;
   }
 
   touchButtons() {
@@ -413,13 +399,11 @@ export class ChallengeApp extends PlayApp {
     const d = this.deck;
     const s = this.game.score();
     let out = `<div class="box-title">${ui.esc(d.name)}</div>`;
-    out += `<div>Your score  ${ui.bold(s, theme.ACCENT)}  ${ui.muted(`(${d.proven ? "the most possible" : "best known"} is ${d.target})`)}</div><div class="gap"></div>`;
+    out += `<div>Your score  ${ui.bold(s, theme.ACCENT)}  ${ui.muted(`(the most possible is ${d.target})`)}</div><div class="gap"></div>`;
     out += ui.levelLines(this.game.levels()) + `<div class="gap"></div>`;
     out += `<div>${this.verdict()}</div>`;
-    if (s > d.target) out += `<div>${ui.muted("That would be a new record: copy your play and share it.")}</div>`;
     out += `<div class="gap"></div><div class="actions">${[
       ["l", "share your score"],
-      ...(s > d.target ? [["copy", "copy your play"]] : []),
       ["s", "see a best play"],
       ["n", "try again"],
       ["d", "next challenge"],

@@ -37,8 +37,8 @@
       <section id="challenges" hidden>
         <p class="intro">
           All the tiles are yours from the start: place them in any order and get as close as you can to the most the deck
-          allows. For the small decks that maximum is <em>proven</em> (every position was searched); for the bigger ones it is
-          the best the engine has found, so beating it would be a new record. On a computer every tile starts on the board: move
+          allows. Every maximum is <em>proven</em>: an exhaustive search tried every possible stack. On a computer every tile
+          starts on the board: move
           them into a stack and submit it. On a phone, pick tiles from the tray one at a time. <kbd>s</kbd> shows a best play.
         </p>
         <div class="decks"></div>
@@ -99,7 +99,9 @@
           <p>
             With only a few tiles the whole game can be searched: every reachable position, counting stacks that differ by sliding
             or turning as the same. That gives the exact value of perfect play, and the most each deck can score with the order
-            chosen freely, which the <a href="#challenges">Challenges</a> ask you to reach.
+            chosen freely. A faster search answers just that last question (any finished stack can be built level by level, and
+            stacks that can't beat the best found are cut short), proving the maximum of decks up to seven tiles in seconds: the
+            <a href="#challenges">Challenges</a> ask you to reach those.
           </p>
           <table>
             <thead>
