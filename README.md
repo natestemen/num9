@@ -96,6 +96,53 @@ legal moves, tie set and pick. `rust/tests/golden.rs` replays them, so the
 engine still matches the Python behaviour it replaced (`generate.py` there
 documents how they were made).
 
+## strategies
+
+Each strategy picks where the tile in hand goes, knowing which tiles are
+still to come but not their order (`num9_core.STRATEGIES`; results under
+[stats](#stats)).
+
+- `place_randomly`: any legal spot, uniformly at random. The baseline for
+  how much thinking helps.
+- `go_up_randomly`: a random spot on the highest level the tile can reach.
+- `edges_then_up`: 0s and 1s on the ground, everything else as high as it
+  can go; among those spots, the one touching the most edges, which keeps
+  the stack compact.
+- `solid_base_high_top`: scores every spot by a weighted mix of how full and
+  hole-free its level is, the support under it, edges touching, points
+  scored and the stack's shape (weights tuned by `optimize_params.py`), and
+  picks among the best.
+- `maximize_lookahead`: looks one tile ahead, scoring each spot by its
+  points plus how high the tiles still to come could then go on average
+  (weighted by their values and how many of each are left).
+- `low_to_base`: `edges_then_up` with a higher cut-off: tiles worth 4 or
+  less go on the ground and the rest go up, except for the last four tiles,
+  which all go as high as they can.
+- `monte_carlo`: shortlists the snuggest few spots on each level and plays
+  the rest of the game out 64 times from each, shuffling the tiles still to
+  come and finishing with `low_to_base`; the best average final score wins.
+  The terminal game's hints use the same method.
+- `keep_support`: `low_to_base`, but a tile going up also avoids stranding
+  support: cells of the level below that no tile still to come could ever
+  rest on (`num9_core::support`). Spots score `edges touching - 0.15 × cells
+  stranded`; on the same 10,000 deals it beats `low_to_base` by 2.41 ± 0.13
+  points a game.
+
+Three searches look for the best play outright instead, once the order is
+known or when it is free to choose:
+
+- `solve` (nested Monte Carlo search, `num9_core::solver`): finds a
+  high-scoring play of a known deal by trying every candidate at each step,
+  judging each with a smaller search from there, and following the best
+  complete game found. It finds the "best play" shown after a game.
+- `maxscore` (Nested Rollout Policy Adaptation, `num9_core::nrpa`): learns
+  a weight for each move from its own best games, steering its random
+  playouts towards them; for a fixed deal or with the order free.
+- `tower` (`num9_core::tower`): designs stacks from the top down for the
+  highest possible score: chooses what goes on top, covers it as cheaply as
+  possible level by level with a beam search, then turns the design into a
+  legal play. It found the 236 record.
+
 ## stats
 
 `python benchmark_strategies.py --games 1000 --seed 1 --update-readme` (one thread):
@@ -112,12 +159,3 @@ documents how they were made).
 | monte_carlo | 1000 | 86.41 | 86.00 | 54 | 142 | 505.86 | 1.98 |
 | keep_support | 1000 | 64.78 | 63.00 | 35 | 125 | 0.70 | 1419.30 |
 <!-- benchmarks:end -->
-
-`keep_support` is `low_to_base` (low tiles on the ground, the rest as high
-as they go, snuggest spot first) with one more thing to weigh when a tile
-goes up: the support it strands. A tile on level L can leave cells of level
-L-1 that no tile still to come could ever rest on (pockets too small or the
-wrong shape, or on a single tile); `num9_core::support` counts them, and
-spots on the level score `edges touching - 0.15 × cells stranded`. Played
-on the same 10,000 deals as `low_to_base`, it scores +2.41 ± 0.13 more a
-game, winning 46% of them and losing 32%.
