@@ -10,13 +10,15 @@
 //!   places a tile below the highest level in use.
 //! - Branch and bound: a position is abandoned when even an optimistic
 //!   ceiling on its final score can't beat the best play found so far. The
-//!   ceiling puts the tiles left as high as the rule that every level above
-//!   the ground rests on at least two tiles allows (see [`ceiling`]).
+//!   ceiling shares the tiles left out between the levels in the best way
+//!   that keeps each level's area within the level below's and at least two
+//!   tiles under every level in use (see [`ceiling`]).
 //!
 //! Neither discards anything that could do better, so the best play found
 //! is the best there is.
 
-use std::collections::HashSet;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::hash::BuildHasherDefault;
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering::Relaxed};
 use std::sync::Mutex;
@@ -24,48 +26,115 @@ use std::thread;
 
 use crate::board::{Board, Move, DEPTH};
 use crate::exact::{key, moves, remaining, Prehashed};
+use crate::piece::shape;
 
 type Visited = HashSet<u128, BuildHasherDefault<Prehashed>>;
 
 /// A play: the tiles in the order placed, from the empty board.
 pub type Line = Vec<(u8, Move)>;
 
+const NONE: i64 = i64::MIN / 4;
+
+fn area(v: usize) -> u32 {
+    shape(v as u8, 0).tiles
+}
+
+fn pack(left: &[u8; 10]) -> u64 {
+    left.iter()
+        .enumerate()
+        .fold(0, |k, (v, &c)| k | (c as u64) << (4 * v))
+}
+
+/// Every way to take some of the tiles `left` (as counts per value).
+fn subsets(left: &[u8; 10]) -> Vec<[u8; 10]> {
+    let mut out = vec![[0u8; 10]];
+    for v in 0..10 {
+        out = out
+            .into_iter()
+            .flat_map(|s| {
+                (0..=left[v]).map(move |c| {
+                    let mut t = s;
+                    t[v] = c;
+                    t
+                })
+            })
+            .collect();
+    }
+    out
+}
+
+thread_local! {
+    /// Ceilings already worked out (they depend on few things, so repeat a lot).
+    static CEILINGS: RefCell<HashMap<(u64, u8, u8, u16), i64>> = RefCell::new(HashMap::new());
+}
+
+fn cached(key: (u64, u8, u8, u16), f: impl FnOnce() -> i64) -> i64 {
+    if let Some(v) = CEILINGS.with(|c| c.borrow().get(&key).copied()) {
+        return v;
+    }
+    let v = f();
+    CEILINGS.with(|c| c.borrow_mut().insert(key, v));
+    v
+}
+
 /// The most the tiles `left` could still add to a stack whose highest level
-/// is `top` (holding `on_top` tiles), placed on `top` or above. Each level
-/// in use above the ground needs at least two tiles on the level below it,
-/// so for each final height the cheapest tiles fill those, and the rest go on
-/// the top; area is ignored, so this never underestimates.
-pub fn ceiling(left: &[u8; 10], top: usize, on_top: usize) -> i64 {
-    let mut values: Vec<i64> = (0..10)
-        .flat_map(|v| std::iter::repeat_n(v as i64, left[v] as usize))
-        .collect();
-    values.sort_unstable();
-    let n = values.len();
-    let mut best = values.iter().sum::<i64>() * top as i64;
-    let first = 2usize.saturating_sub(on_top);
-    for h in 1..DEPTH - top {
-        // `first` more on `top`, two on each level up to `top + h - 1`,
-        // at least one on `top + h`.
-        let needed = first + 2 * (h - 1) + 1;
-        if needed > n {
-            break;
-        }
-        let mut total = 0;
-        let mut k = 0;
-        for _ in 0..first {
-            total += values[k] * top as i64;
-            k += 1;
-        }
-        for level in 1..h {
-            for _ in 0..2 {
-                total += values[k] * (top + level) as i64;
-                k += 1;
+/// is `top`, holding `on_top` tiles over `area_top` cells, placed on `top`
+/// or above (or [`NONE`] if they can't all be placed). Every way of sharing
+/// them out between the levels is tried, keeping only to two rules every
+/// stack obeys: a level's area fits inside the level below's (its tiles lie
+/// on it), and a level above the ground has at least two tiles under it.
+/// Shapes are ignored, so this never underestimates.
+pub fn ceiling(left: &[u8; 10], top: usize, on_top: usize, area_top: u32) -> i64 {
+    cached(
+        (
+            pack(left),
+            top as u8,
+            100 + on_top.min(2) as u8,
+            area_top as u16,
+        ),
+        || {
+            let mut best = NONE;
+            for s in subsets(left) {
+                let rest: [u8; 10] = std::array::from_fn(|v| left[v] - s[v]);
+                let count = on_top + s.iter().map(|&c| c as usize).sum::<usize>();
+                let a = area_top + (0..10).map(|v| s[v] as u32 * area(v)).sum::<u32>();
+                let gain: i64 = (0..10).map(|v| s[v] as i64 * v as i64).sum::<i64>() * top as i64;
+                let above = above(top + 1, a, count >= 2, &rest);
+                if above > NONE {
+                    best = best.max(gain + above);
+                }
+            }
+            best
+        },
+    )
+}
+
+/// The most the tiles `left` could add on `level` and above, the level below
+/// covering `below` cells (with at least two tiles if `two`).
+fn above(level: usize, below: u32, two: bool, left: &[u8; 10]) -> i64 {
+    if left.iter().all(|&c| c == 0) {
+        return 0;
+    }
+    if level >= DEPTH || !two {
+        return NONE;
+    }
+    cached((pack(left), level as u8, 0, below as u16), || {
+        let mut best = NONE;
+        for s in subsets(left).into_iter().skip(1) {
+            let a = (0..10).map(|v| s[v] as u32 * area(v)).sum::<u32>();
+            if a > below {
+                continue;
+            }
+            let rest: [u8; 10] = std::array::from_fn(|v| left[v] - s[v]);
+            let count = s.iter().map(|&c| c as usize).sum::<usize>();
+            let rest_gain = above(level + 1, a, count >= 2, &rest);
+            if rest_gain > NONE {
+                let gain: i64 = (0..10).map(|v| s[v] as i64 * v as i64).sum::<i64>() * level as i64;
+                best = best.max(gain + rest_gain);
             }
         }
-        total += values[k..].iter().sum::<i64>() * (top + h) as i64;
-        best = best.max(total);
-    }
-    best
+        best
+    })
 }
 
 /// The search's shared state: positions already explored, and the best
@@ -106,8 +175,9 @@ impl Search {
             .rev()
             .find(|&l| !board.layer_is_empty(l))
             .unwrap_or(0);
-        let on_top = board.pieces().iter().filter(|p| p.mv.layer == top).count();
-        if score + ceiling(left, top, on_top) <= self.best.load(Relaxed) {
+        let on_top = board.pieces().iter().filter(|p| p.mv.layer == top);
+        let (count, cells) = on_top.fold((0, 0), |(n, a), p| (n + 1, a + area(p.value as usize)));
+        if score + ceiling(left, top, count, cells) <= self.best.load(Relaxed) {
             return;
         }
         // Explored before (perhaps by another thread, perhaps still going):
@@ -218,12 +288,25 @@ mod tests {
     }
 
     #[test]
-    fn the_ceiling_is_never_below_a_real_play() {
-        // Two of each 0-2 can make 7; from the empty board the ceiling must allow it.
-        assert!(ceiling(&[2, 2, 2, 0, 0, 0, 0, 0, 0, 0], 0, 0) >= 7);
-        // Nothing left: nothing to add above the ground.
-        assert_eq!(ceiling(&[0; 10], 0, 0), 0);
-        // One tile, one level up from a top with two tiles.
-        assert_eq!(ceiling(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 1], 1, 2), 18);
+    fn the_ceiling_is_never_below_the_best_play() {
+        for left in [
+            [2, 2, 2, 0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 2, 2, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 2, 2, 0],
+        ] {
+            let (best, _, _) = best_free(left, None, 4);
+            assert!(ceiling(&left, 0, 0, 0) >= best, "{left:?}");
+        }
+        // Nothing left: nothing to add.
+        assert_eq!(ceiling(&[0; 10], 0, 0, 0), 0);
+        // A 9 (10 cells) fits on a level of two tiles covering 20, not on 9.
+        let nine = [0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+        assert_eq!(ceiling(&nine, 1, 2, 20), 18);
+        assert_eq!(ceiling(&nine, 1, 2, 9), 9);
+        // Two 7s and two 8s: by area alone a 7 and an 8 (15 cells) could sit
+        // on the others (15 cells), so 15; the shapes allow only 8, but a
+        // ceiling only has to stay above.
+        assert_eq!(ceiling(&[0, 0, 0, 0, 0, 0, 0, 2, 2, 0], 0, 0, 0), 15);
     }
 }
