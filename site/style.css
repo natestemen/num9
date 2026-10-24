@@ -564,6 +564,25 @@ section[hidden] {
   background: rgb(40, 44, 54);
 }
 
+/* Challenges on a computer: submit the stack. */
+.panel .submit {
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.1em;
+  padding: 0.55rem;
+  color: #000;
+  background: var(--accent);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.panel .submit:disabled {
+  color: var(--muted);
+  background: rgb(40, 44, 54);
+  cursor: default;
+}
+
 /* Challenges: the tile you're holding. */
 .tray button.held {
   outline: 3px solid var(--fg);

@@ -6,11 +6,14 @@ import { geometry } from "./game.js";
 import { Pool } from "./workers.js";
 import { PlayApp } from "./play.js";
 import { ChallengeApp, loadBests } from "./challenges.js";
+import { SandboxApp } from "./sandbox.js";
 import { RecordsApp } from "./records.js";
 import { CompanionApp } from "./companion.js";
 
 const screens = ["play", "companion", "challenges", "records", "about"];
 const apps = {};
+// The screens, for poking at from the browser console.
+window.num9 = { apps };
 let active = null;
 let engine;
 let pool;
@@ -52,7 +55,11 @@ async function create(name, arg) {
         })
         .join("");
     };
-    const app = new ChallengeApp(section, engine, pool, { onHelp: openHelp, onDeck: mark, challenges });
+    // With a mouse and room, every tile starts on the board to be arranged
+    // freely; on phones, tiles are picked from a tray and placed in turn.
+    const free = matchMedia("(pointer: fine) and (min-width: 861px)").matches;
+    const App = free ? SandboxApp : ChallengeApp;
+    const app = new App(section, engine, pool, { onHelp: openHelp, onDeck: mark, challenges });
     picker.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-k]");
       if (b) app.choose(challenges[b.dataset.k]);
