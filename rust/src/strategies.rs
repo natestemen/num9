@@ -10,6 +10,7 @@ use crate::game::TILES;
 use crate::piece::shape;
 use crate::rng::Rng;
 use crate::rollout::{self, MonteCarlo};
+use crate::support::{values_to_come, Support};
 
 /// Weights for [`Strategy::SolidBaseHighTop`]; defaults match the Python ones.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -56,6 +57,15 @@ pub enum Strategy {
     /// Pick the candidate move with the best average final score over
     /// simulated continuations (see [`crate::rollout`]).
     MonteCarlo(MonteCarlo),
+    /// `LowToBase`, except that a tile going up also weighs the support it
+    /// strands: cells of the level below that no tile still to come could
+    /// rest on any more (see [`crate::support`]). Spots on the level are
+    /// scored `edges touching - weight × cells stranded`.
+    KeepSupport {
+        max_low: u8,
+        endgame: u8,
+        weight: f64,
+    },
 }
 
 /// A strategy's deterministic output: pick uniformly among `moves[candidates[k]]`.
@@ -72,7 +82,7 @@ impl Decision {
 }
 
 impl Strategy {
-    pub const NAMES: [&'static str; 7] = [
+    pub const NAMES: [&'static str; 8] = [
         "place_randomly",
         "go_up_randomly",
         "edges_then_up",
@@ -80,6 +90,7 @@ impl Strategy {
         "maximize_lookahead",
         "low_to_base",
         "monte_carlo",
+        "keep_support",
     ];
 
     /// Look a strategy up by the name used in `benchmark_strategies.py`
@@ -98,6 +109,11 @@ impl Strategy {
                 endgame: 4,
             },
             "monte_carlo" => Strategy::MonteCarlo(MonteCarlo::default()),
+            "keep_support" => Strategy::KeepSupport {
+                max_low: 4,
+                endgame: 4,
+                weight: 1.0,
+            },
             _ => return None,
         })
     }
@@ -112,6 +128,15 @@ impl Strategy {
                 let tiles_left = TILES.saturating_sub(board.pieces().len());
                 let max_low = (tiles_left > *endgame as usize).then_some(*max_low);
                 edges_then_up(board, value, &moves, max_low)
+            }
+            Strategy::KeepSupport {
+                max_low,
+                endgame,
+                weight,
+            } => {
+                let tiles_left = TILES.saturating_sub(board.pieces().len());
+                let max_low = (tiles_left > *endgame as usize).then_some(*max_low);
+                keep_support(board, value, &moves, max_low, *weight)
             }
             Strategy::MonteCarlo(mc) => rollout::monte_carlo(board, value, &moves, mc),
             Strategy::SolidBaseHighTop(w) => solid_base_high_top(board, value, &moves, w),
@@ -158,6 +183,44 @@ fn edges_then_up(board: &Board, value: u8, moves: &[Move], max_low: Option<u8>) 
         .iter()
         .zip(&edges)
         .filter(|(_, &e)| e == best)
+        .map(|(&k, _)| k)
+        .collect()
+}
+
+/// `edges_then_up`, but spots above the ground lose `weight` per cell of
+/// support they strand on the level below.
+fn keep_support(
+    board: &Board,
+    value: u8,
+    moves: &[Move],
+    max_low: Option<u8>,
+    weight: f64,
+) -> Vec<usize> {
+    let options = if max_low.is_some_and(|m| value <= m) {
+        indices_on_layer(moves, 0)
+    } else {
+        indices_on_layer(moves, max_layer(moves))
+    };
+    let layer = moves[options[0]].layer;
+    let values = values_to_come(board, value);
+    let support = Support::new(board, layer);
+    let before = support.as_ref().map(|s| s.usable(&values));
+    let scores: Vec<f64> = options
+        .iter()
+        .map(|&k| {
+            let mv = moves[k];
+            let edges = board.num_edges_touching(value, mv) as f64;
+            match (&support, &before) {
+                (Some(s), Some(b)) => edges - weight * s.stranded_by(b, value, mv, &values) as f64,
+                _ => edges,
+            }
+        })
+        .collect();
+    let best = scores.iter().cloned().fold(f64::MIN, f64::max);
+    options
+        .iter()
+        .zip(&scores)
+        .filter(|(_, &s)| s == best)
         .map(|(&k, _)| k)
         .collect()
 }
