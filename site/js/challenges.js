@@ -14,7 +14,7 @@ import * as ui from "./ui.js";
 const STORE = "num9-challenges";
 
 /// Each challenge's best score so far, kept in this browser only.
-function loadBests() {
+export function loadBests() {
   try {
     return JSON.parse(localStorage.getItem(STORE)) ?? {};
   } catch {
@@ -22,7 +22,7 @@ function loadBests() {
   }
 }
 
-function saveBest(id, s) {
+export function saveBest(id, s) {
   try {
     const bests = loadBests();
     if (!(bests[id] >= s)) {
@@ -409,4 +409,3 @@ export class ChallengeApp extends PlayApp {
   }
 }
 
-export { loadBests };

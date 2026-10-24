@@ -118,8 +118,13 @@ export class BoardView {
   /// Draw `pieces` (with `top`, their TopView). Options: `heightMap`,
   /// `ghost` ({value, move, problem}), `hint` ({value, move}), `last`
   /// (index of the piece to underline), `mark` (a {value, move} to outline),
-  /// `spotlight` (a level: tiles on others are dimmed).
-  draw(pieces, top, { heightMap = false, ghost = null, hint = null, last = pieces.length - 1, mark = null, spotlight = null } = {}) {
+  /// `spotlight` (a level: tiles on others are dimmed), `outlines` (more
+  /// {value, move, color} to outline).
+  draw(
+    pieces,
+    top,
+    { heightMap = false, ghost = null, hint = null, last = pieces.length - 1, mark = null, spotlight = null, outlines = [] } = {},
+  ) {
     const { ctx, cell: s, vp } = this;
     const { ox, oy } = this.offset();
     ctx.clearRect(0, 0, this.w, this.h);
@@ -231,9 +236,10 @@ export class BoardView {
       }
     });
 
-    if (mark) {
-      const cs = cells(mark.value, mark.move).filter(([i, j]) => inView(i, j));
-      outline(ctx, cs, x, y, s, theme.HINT, Math.max(2, s / 8));
+    if (mark) outlines = [...outlines, { ...mark, color: theme.HINT }];
+    for (const o of outlines) {
+      const cs = cells(o.value, o.move).filter(([i, j]) => inView(i, j));
+      outline(ctx, cs, x, y, s, o.color, Math.max(2, s / 8));
     }
 
     if (hint) {
