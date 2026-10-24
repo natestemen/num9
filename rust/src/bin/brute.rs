@@ -2,13 +2,14 @@
 //! position (see `num9_core::exact`): the deck is two (or `copies`) of each
 //! value below `n`, dealt in random order.
 //!
-//!     cargo run --release --bin brute -- <n> [copies] [--table FILE]
+//!     cargo run --release --bin brute -- <n> [copies] [--table FILE] [--line]
 //!
 //! Prints the best expected score (the game solved), the best score if the
 //! order could be chosen freely, and (with `BRUTE_COUNT=1`, which turns off
 //! pruning) how many distinct games there are. `--table` saves every
 //! position with three or more tiles still to come, so that what remains can
-//! be solved quickly later (the website's puzzles use these).
+//! be solved quickly later. `--line` prints a play reaching the best score
+//! with the order free, in the records' value@level:row:col:rotation form.
 
 use std::time::Instant;
 
@@ -22,7 +23,7 @@ fn main() {
         .map(|k| args.get(k + 1).expect("--table needs a file").clone());
     let numbers: Vec<usize> = args[1..]
         .iter()
-        .take_while(|a| *a != "--table")
+        .take_while(|a| a.parse::<usize>().is_ok())
         .map(|a| a.parse().expect("usage: brute <n> [copies] [--table FILE]"))
         .collect();
     let n = numbers.first().copied().unwrap_or(2);
@@ -45,6 +46,14 @@ fn main() {
     println!("best expected score (random order): {:.4}", root.expected);
     println!("best score (order chosen freely): {}", root.best);
     println!("time: {:.1}s", start.elapsed().as_secs_f64());
+    if args.iter().any(|a| a == "--line") {
+        let line = num9_core::exact::best_line(&memo, left);
+        let moves: Vec<String> = line
+            .iter()
+            .map(|(v, m)| format!("{v}@{}:{}:{}:{}", m.layer, m.i, m.j, m.rot))
+            .collect();
+        println!("best line: {}", moves.join(" "));
+    }
     if let Some(path) = table {
         let bytes = memo.export(tiles.saturating_sub(3));
         std::fs::write(&path, &bytes).expect("can't write the table");

@@ -344,6 +344,39 @@ pub fn placements(
         .collect()
 }
 
+/// A play reaching the best score with the order of `left` free (the
+/// `best` of [`solve`]), as (value, move) steps from the empty board: each
+/// step goes to a position that can still reach it. Solve the deck first
+/// (with this memo) or this solves it on the way.
+pub fn best_line(memo: &Memo, left: [u8; 10]) -> Vec<(u8, Move)> {
+    let mut board = Board::new();
+    let mut left = left;
+    let target = solve(memo, &mut board, &mut left.clone()).best;
+    let mut line = Vec::new();
+    while remaining(&left) > 0 {
+        let options: Vec<(u8, Move)> = (0..10u8)
+            .filter(|&v| left[v as usize] > 0)
+            .flat_map(|v| moves(&board, v).into_iter().map(move |m| (v, m)))
+            .collect();
+        let step = options
+            .into_iter()
+            .find(|&(v, m)| {
+                board.place(v, m).expect("legal move");
+                left[v as usize] -= 1;
+                let best = solve(memo, &mut board, &mut left.clone()).best;
+                left[v as usize] += 1;
+                board.undo();
+                best == target
+            })
+            .expect("some move keeps the best score in reach");
+        board.place(step.0, step.1).expect("legal move");
+        left[step.0 as usize] -= 1;
+        line.push(step);
+    }
+    debug_assert_eq!(board.score(), target);
+    line
+}
+
 /// The highest layer `value` can go on.
 fn reach(board: &Board, value: u8) -> i64 {
     let counts = board.count_valid_moves(value);
@@ -519,6 +552,25 @@ mod tests {
         let b = placements(&seeded, &mut board, 3, &mut rest);
         assert_eq!(a, b);
         assert_eq!(solve_deck(&Memo::new(), left, 2, 4), one);
+    }
+
+    #[test]
+    fn best_lines_reach_the_best_score() {
+        for left in [
+            [2, 2, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+        ] {
+            let memo = Memo::new();
+            let best = solve_deck(&memo, left, 2, 4).best;
+            let line = best_line(&memo, left);
+            let mut board = Board::new();
+            for &(v, m) in &line {
+                assert!(board.pieces().is_empty() || board.is_valid_move(v, m));
+                board.place(v, m).unwrap();
+            }
+            assert_eq!(line.len(), remaining(&left) as usize);
+            assert_eq!(board.score(), best);
+        }
     }
 
     #[test]
