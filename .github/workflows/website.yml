@@ -20,10 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup target add wasm32-unknown-unknown
-      - uses: actions/cache@v4
-        with:
-          path: site/.cache
-          key: puzzle-tables-${{ hashFiles('rust/src/exact.rs', 'rust/src/board.rs', 'rust/src/piece.rs') }}
       - run: site/build.sh
       - name: Publish
         working-directory: site/_site
