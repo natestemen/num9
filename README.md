@@ -143,6 +143,28 @@ known or when it is free to choose:
   possible level by level with a beam search, then turns the design into a
   legal play. It found the 236 record.
 
+## head to head
+
+`cargo run --release --bin arena -- [--games N] [--baseline SPEC] SPEC...`
+plays strategies on the same deals, so differences are measured on matched
+games: far more precisely than comparing separate averages. A SPEC is a
+strategy with optional settings, e.g. `monte_carlo:policy=keep_support`.
+
+Does Monte Carlo get better if its simulated games are played by
+`keep_support` instead of `low_to_base`? Barely: much less than spending
+the same extra time on more simulations of the cheap policy (its estimates
+are noisy, so more of them helps most):
+
+<!-- arena:start -->
+`arena --games 1000 --seed 1`: 1000 deals, the same for every strategy; ± is one standard error.
+
+| strategy | avg | vs monte_carlo on the same deals | wins / ties / losses | games/s (8 threads) |
+| --- | --- | --- | --- | --- |
+| `monte_carlo` | 86.41 ± 0.36 |  |  | 5.4 |
+| `monte_carlo:policy=keep_support` | 87.14 ± 0.35 | +0.72 ± 0.42 | 508 / 40 / 452 | 0.9 |
+| `monte_carlo:rollouts=320` | 88.57 ± 0.35 | +2.15 ± 0.41 | 553 / 49 / 398 | 0.9 |
+<!-- arena:end -->
+
 ## stats
 
 `python benchmark_strategies.py --games 1000 --seed 1 --update-readme` (one thread):
