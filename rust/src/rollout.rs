@@ -22,6 +22,9 @@ pub struct MonteCarlo {
     pub policy: Box<Strategy>,
     /// Mixed into the per-position random seed.
     pub seed: u64,
+    /// Spend the budget (`rollouts` for every candidate) by successive
+    /// halving instead of evenly: see [`halving`].
+    pub halving: bool,
 }
 
 impl Default for MonteCarlo {
@@ -34,6 +37,7 @@ impl Default for MonteCarlo {
                 endgame: 4,
             }),
             seed: 0,
+            halving: false,
         }
     }
 }
@@ -90,6 +94,9 @@ pub fn monte_carlo(board: &Board, value: u8, moves: &[Move], mc: &MonteCarlo) ->
     if candidates.len() <= 1 {
         return candidates;
     }
+    if mc.halving {
+        return halving(board, value, moves, &candidates, mc);
+    }
     let totals = rollout_totals(board, value, moves, &candidates, mc);
     let best = *totals.iter().max().unwrap();
     candidates
@@ -98,6 +105,47 @@ pub fn monte_carlo(board: &Board, value: u8, moves: &[Move], mc: &MonteCarlo) ->
         .filter(|&(_, &t)| t == best)
         .map(|(&k, _)| k)
         .collect()
+}
+
+/// Successive halving: the same budget as `mc.rollouts` simulations for
+/// every candidate, spent in rounds. Each round simulates every candidate
+/// still in (on fresh tile orders, shared between them) and drops the weaker
+/// half, so the contenders, not the obvious losers, get most of the
+/// simulations. Returns the best of the last round (all of them on a tie).
+pub fn halving(
+    board: &Board,
+    value: u8,
+    moves: &[Move],
+    candidates: &[usize],
+    mc: &MonteCarlo,
+) -> Vec<usize> {
+    let budget = mc.rollouts * candidates.len();
+    let rounds = (usize::BITS - (candidates.len() - 1).leading_zeros()).max(1) as usize;
+    // (index into moves, total score, simulations); everyone still in has
+    // had the same number, so totals compare directly.
+    let mut alive: Vec<(usize, i64)> = candidates.iter().map(|&k| (k, 0)).collect();
+    for round in 0..rounds {
+        let round_mc = MonteCarlo {
+            rollouts: (budget / rounds / alive.len()).max(1),
+            seed: mc.seed ^ (round as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15),
+            ..mc.clone()
+        };
+        let picks: Vec<usize> = alive.iter().map(|a| a.0).collect();
+        for (a, t) in alive
+            .iter_mut()
+            .zip(rollout_totals(board, value, moves, &picks, &round_mc))
+        {
+            a.1 += t;
+        }
+        if round + 1 < rounds {
+            alive.sort_by_key(|a| std::cmp::Reverse(a.1));
+            alive.truncate(alive.len().div_ceil(2));
+        }
+    }
+    let best = alive.iter().map(|a| a.1).max().unwrap();
+    let mut out: Vec<usize> = alive.iter().filter(|a| a.1 == best).map(|a| a.0).collect();
+    out.sort_unstable();
+    out
 }
 
 /// Sum of final scores over `mc.rollouts` simulated games for each candidate.
@@ -197,5 +245,30 @@ mod tests {
         let b = rollout_totals(&board, 6, &moves, &cands, &mc);
         assert_eq!(a, b);
         assert!(a.iter().all(|&t| t >= board.score() * 8));
+    }
+
+    #[test]
+    fn halving_picks_a_candidate_within_the_budget() {
+        let mut rng = Rng::new(3);
+        let tiles = crate::game::shuffled_tiles(&mut rng);
+        let mut board = Board::new();
+        let low = Strategy::from_name("low_to_base").unwrap();
+        for &v in &tiles[..8] {
+            let mv = low.choose(&board, v, &mut rng);
+            board.place(v, mv).unwrap();
+        }
+        let value = tiles[8];
+        let moves = board.find_valid_moves(value);
+        let mc = MonteCarlo {
+            rollouts: 16,
+            halving: true,
+            ..MonteCarlo::default()
+        };
+        let candidates = candidate_moves(&board, value, &moves, mc.per_layer);
+        let picked = halving(&board, value, &moves, &candidates, &mc);
+        assert!(!picked.is_empty());
+        assert!(picked.iter().all(|k| candidates.contains(k)));
+        // Deterministic, like the rest of the engine.
+        assert_eq!(picked, halving(&board, value, &moves, &candidates, &mc));
     }
 }
