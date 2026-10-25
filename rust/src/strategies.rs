@@ -120,6 +120,48 @@ impl Strategy {
         })
     }
 
+    /// A strategy by name with optional settings after a colon, e.g.
+    /// `monte_carlo:rollouts=128,policy=keep_support` or
+    /// `keep_support:weight=0.2`. Settings: `max_low`, `endgame` (low_to_base,
+    /// keep_support), `weight` (keep_support), `rollouts`, `per_layer`,
+    /// `policy` (monte_carlo; the policy is a plain strategy name).
+    pub fn from_spec(spec: &str) -> Result<Strategy, String> {
+        let (name, settings) = spec.split_once(':').unwrap_or((spec, ""));
+        let mut s =
+            Strategy::from_name(name).ok_or_else(|| format!("unknown strategy {name:?}"))?;
+        for setting in settings.split(',').filter(|kv| !kv.is_empty()) {
+            let (key, value) = setting
+                .split_once('=')
+                .ok_or_else(|| format!("expected key=value, got {setting:?}"))?;
+            let bad = || format!("bad value {value:?} for {key}");
+            let int = || value.parse::<u8>().map_err(|_| bad());
+            match (&mut s, key) {
+                (
+                    Strategy::LowToBase { max_low, .. } | Strategy::KeepSupport { max_low, .. },
+                    "max_low",
+                ) => *max_low = int()?,
+                (
+                    Strategy::LowToBase { endgame, .. } | Strategy::KeepSupport { endgame, .. },
+                    "endgame",
+                ) => *endgame = int()?,
+                (Strategy::KeepSupport { weight, .. }, "weight") => {
+                    *weight = value.parse().map_err(|_| bad())?
+                }
+                (Strategy::MonteCarlo(mc), "rollouts") => {
+                    mc.rollouts = value.parse().map_err(|_| bad())?
+                }
+                (Strategy::MonteCarlo(mc), "per_layer") => {
+                    mc.per_layer = value.parse().map_err(|_| bad())?
+                }
+                (Strategy::MonteCarlo(mc), "policy") => {
+                    *mc.policy = Strategy::from_name(value).ok_or_else(bad)?;
+                }
+                _ => return Err(format!("{name} has no setting {key:?}")),
+            }
+        }
+        Ok(s)
+    }
+
     pub fn decide(&self, board: &Board, value: u8) -> Decision {
         let moves = board.find_valid_moves(value);
         let candidates = match self {
@@ -385,5 +427,31 @@ mod tests {
                     .unwrap();
             }
         }
+    }
+
+    #[test]
+    fn specs_set_strategy_settings() {
+        let s =
+            Strategy::from_spec("monte_carlo:rollouts=16,per_layer=2,policy=keep_support").unwrap();
+        let Strategy::MonteCarlo(mc) = s else {
+            panic!("{s:?}")
+        };
+        assert_eq!((mc.rollouts, mc.per_layer), (16, 2));
+        assert_eq!(*mc.policy, Strategy::from_name("keep_support").unwrap());
+        assert_eq!(
+            Strategy::from_spec("keep_support:weight=0.5,max_low=3").unwrap(),
+            Strategy::KeepSupport {
+                max_low: 3,
+                endgame: 4,
+                weight: 0.5
+            }
+        );
+        assert_eq!(
+            Strategy::from_spec("low_to_base").unwrap(),
+            Strategy::from_name("low_to_base").unwrap()
+        );
+        assert!(Strategy::from_spec("low_to_base:weight=1").is_err());
+        assert!(Strategy::from_spec("monte_carlo:policy=nope").is_err());
+        assert!(Strategy::from_spec("nope").is_err());
     }
 }
