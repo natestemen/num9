@@ -330,7 +330,8 @@ export class CompanionApp extends PlayApp {
       line2 = ui.span(this.message.text, `color:${color}`);
     }
     if (this.done()) line2 = this.verdict();
-    return `<div>${this.facts()}</div><div>${line2 || "&nbsp;"}</div>`;
+    const bag = this.done() ? "" : ui.bagLine(this.inDeck());
+    return `<div>${this.facts()}</div>${bag}<div>${line2 || "&nbsp;"}</div>`;
   }
 
   verdict() {

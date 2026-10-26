@@ -783,7 +783,8 @@ export class PlayApp {
     } else {
       line2 = ui.muted("Tap: aim · drag: slide · tap tile: place");
     }
-    return (line1 ? `<div>${line1}</div>` : "") + `<div>${facts}</div><div>${line2}</div>`;
+    const bag = g.isOver() ? "" : ui.bagLine(g.stillToCome());
+    return (line1 ? `<div>${line1}</div>` : "") + `<div>${facts}</div>${bag}<div>${line2}</div>`;
   }
 
   /// After the game: how it compares.

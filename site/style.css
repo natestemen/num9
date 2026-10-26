@@ -861,6 +861,10 @@ button {
     line-height: 1.5;
   }
 
+  .status .bag-line {
+    letter-spacing: -0.02em;
+  }
+
   .status > div {
     white-space: nowrap;
     overflow: hidden;

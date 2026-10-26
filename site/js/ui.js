@@ -112,16 +112,24 @@ export function bagShapes(left, counts = Array(10).fill(2)) {
   return html + "</div>";
 }
 
-/// The tiles still to come, as dots.
+/// The tiles still to come, as dots: values `from` to `to` (exclusive).
+function bagRow(counts, from, to, copies, gap) {
+  return Array.from({ length: to - from }, (_, k) => from + k)
+    .map((v) => {
+      const n = counts[v];
+      const color = n === 0 ? theme.MUTED : theme.valueCss(v);
+      const dots = Array.from({ length: copies }, (_, k) => (k < n ? "●" : "○")).join("");
+      return span(`${v}${dots}`, `color:${color};font-weight:700`);
+    })
+    .join(gap);
+}
+
+/// The tiles still to come, as dots, in two lines.
 export function bagLines(counts, copies = 2) {
-  const line = (from, to) =>
-    Array.from({ length: to - from }, (_, k) => from + k)
-      .map((v) => {
-        const n = counts[v];
-        const color = n === 0 ? theme.MUTED : theme.valueCss(v);
-        const dots = Array.from({ length: copies }, (_, k) => (k < n ? "●" : "○")).join("");
-        return span(`${v}${dots}`, `color:${color};font-weight:700`);
-      })
-      .join("  ");
-  return `<div>${line(0, 5)}</div><div>${line(5, 10)}</div>`;
+  return `<div>${bagRow(counts, 0, 5, copies, "  ")}</div><div>${bagRow(counts, 5, 10, copies, "  ")}</div>`;
+}
+
+/// The same in one line, for the phone's status lines.
+export function bagLine(counts, copies = 2) {
+  return `<div class="bag-line">${bagRow(counts, 0, 10, copies, " ")}</div>`;
 }
