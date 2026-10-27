@@ -15,6 +15,7 @@ pub mod rng;
 pub mod rollout;
 pub mod solver;
 pub mod strategies;
+pub mod support;
 pub mod tower;
 
 #[cfg(feature = "python")]

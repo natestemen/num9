@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Keep searching for high free-order scores, recording every distinct play
-# above 200 into records/above-200 (see records/above-200/INDEX.md).
+# above a score into a directory (by default above 200 into
+# records/above-200; see its INDEX.md).
 #
-#     records/campaign.sh [parallel searches] [minutes]     # default 4, 60
+#     records/campaign.sh [parallel searches] [minutes] [record above] [dir]
+#                                         # default 4, 60, 200, records/above-200
 #
 # Each search picks a random tower height and beam settings and a fresh
 # seed; searches share the record directory safely. Logs go to runs/.
@@ -10,9 +12,11 @@ set -u
 cd "$(dirname "$0")/.."
 parallel=${1:-4}
 minutes=${2:-60}
+above=${3:-200}
+dir=${4:-records/above-200}
 cargo build --release -q --manifest-path rust/Cargo.toml --bin tower || exit 1
 bin=rust/target/release/tower
-mkdir -p runs records/above-200
+mkdir -p runs "$dir"
 log=runs/campaign-$(date +%Y%m%d-%H%M%S).log
 end=$(($(date +%s) + minutes * 60))
 seed=$(date +%s)
@@ -34,7 +38,7 @@ search() {
         local left=$((end - $(date +%s)))
         [ "$left" -gt 0 ] || break
         echo "[$(date +%T)] start: ${args[*]}" >>"$log"
-        timeout "$left" "$bin" "${args[@]}" --record-above 200 --record-dir records/above-200 \
+        timeout "$left" "$bin" "${args[@]}" --record-above "$above" --record-dir "$dir" \
             --out /dev/null 2>&1 | grep -E "recorded|new best" >>"$log"
         seed=$((seed + 1000))
     done
@@ -46,4 +50,4 @@ for k in $(seq 1 "$parallel"); do
 done
 wait
 echo "campaign finished; $(grep -c recorded "$log") new plays recorded"
-head -12 records/above-200/INDEX.md
+head -12 "$dir/INDEX.md"

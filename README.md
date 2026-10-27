@@ -5,7 +5,7 @@ but in rust, driven from python
 The engine (board, move generation, scoring) and all strategies live in
 `rust/` and are exposed to Python as `num9_core`. They started as a Python
 package; the Rust port reproduces it exactly and is roughly 2,000–3,000×
-faster (see [history](#history)).
+faster.
 
 ## setup
 
@@ -121,6 +121,75 @@ legal moves, tie set and pick. `rust/tests/golden.rs` replays them, so the
 engine still matches the Python behaviour it replaced (`generate.py` there
 documents how they were made).
 
+## strategies
+
+Each strategy picks where the tile in hand goes, knowing which tiles are
+still to come but not their order (`num9_core.STRATEGIES`; results under
+[stats](#stats)).
+
+- `place_randomly`: any legal spot, uniformly at random. The baseline for
+  how much thinking helps.
+- `go_up_randomly`: a random spot on the highest level the tile can reach.
+- `edges_then_up`: 0s and 1s on the ground, everything else as high as it
+  can go; among those spots, the one touching the most edges, which keeps
+  the stack compact.
+- `solid_base_high_top`: scores every spot by a weighted mix of how full and
+  hole-free its level is, the support under it, edges touching, points
+  scored and the stack's shape (weights tuned by `optimize_params.py`), and
+  picks among the best.
+- `maximize_lookahead`: looks one tile ahead, scoring each spot by its
+  points plus how high the tiles still to come could then go on average
+  (weighted by their values and how many of each are left).
+- `low_to_base`: `edges_then_up` with a higher cut-off: tiles worth 4 or
+  less go on the ground and the rest go up, except for the last four tiles,
+  which all go as high as they can.
+- `monte_carlo`: shortlists the snuggest few spots on each level and plays
+  the rest of the game out 64 times from each, shuffling the tiles still to
+  come and finishing with `low_to_base`; the best average final score wins.
+  The terminal game's hints use the same method.
+- `keep_support`: `low_to_base`, but a tile going up also avoids stranding
+  support: cells of the level below that no tile still to come could ever
+  rest on (`num9_core::support`). Spots score `edges touching - 0.15 × cells
+  stranded`; on the same 10,000 deals it beats `low_to_base` by 2.41 ± 0.13
+  points a game.
+
+Three searches look for the best play outright instead, once the order is
+known or when it is free to choose:
+
+- `solve` (nested Monte Carlo search, `num9_core::solver`): finds a
+  high-scoring play of a known deal by trying every candidate at each step,
+  judging each with a smaller search from there, and following the best
+  complete game found. It finds the "best play" shown after a game.
+- `maxscore` (Nested Rollout Policy Adaptation, `num9_core::nrpa`): learns
+  a weight for each move from its own best games, steering its random
+  playouts towards them; for a fixed deal or with the order free.
+- `tower` (`num9_core::tower`): designs stacks from the top down for the
+  highest possible score: chooses what goes on top, covers it as cheaply as
+  possible level by level with a beam search, then turns the design into a
+  legal play. It found the 236 record.
+
+## head to head
+
+`cargo run --release --bin arena -- [--games N] [--baseline SPEC] SPEC...`
+plays strategies on the same deals, so differences are measured on matched
+games: far more precisely than comparing separate averages. A SPEC is a
+strategy with optional settings, e.g. `monte_carlo:policy=keep_support`.
+
+Does Monte Carlo get better if its simulated games are played by
+`keep_support` instead of `low_to_base`? Barely: much less than spending
+the same extra time on more simulations of the cheap policy (its estimates
+are noisy, so more of them helps most):
+
+<!-- arena:start -->
+`arena --games 1000 --seed 1`: 1000 deals, the same for every strategy; ± is one standard error.
+
+| strategy | avg | vs monte_carlo on the same deals | wins / ties / losses | games/s (8 threads) |
+| --- | --- | --- | --- | --- |
+| `monte_carlo` | 86.41 ± 0.36 |  |  | 5.4 |
+| `monte_carlo:policy=keep_support` | 87.14 ± 0.35 | +0.72 ± 0.42 | 508 / 40 / 452 | 0.9 |
+| `monte_carlo:rollouts=320` | 88.57 ± 0.35 | +2.15 ± 0.41 | 553 / 49 / 398 | 0.9 |
+<!-- arena:end -->
+
 ## stats
 
 `python benchmark_strategies.py --games 1000 --seed 1 --update-readme` (one thread):
@@ -128,30 +197,12 @@ documents how they were made).
 <!-- benchmarks:start -->
 | strategy | games | avg | median | min | max | time (s) | games/s |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| place_randomly | 1000 | 1.10 | 0.00 | 0 | 15 | 0.15 | 6838.79 |
-| go_up_randomly | 1000 | 14.90 | 13.00 | 1 | 57 | 0.13 | 7438.11 |
-| edges_then_up | 1000 | 56.78 | 55.00 | 23 | 97 | 0.16 | 6142.68 |
-| solid_base_high_top | 1000 | 48.93 | 47.00 | 14 | 107 | 0.21 | 4686.81 |
-| maximize_lookahead | 1000 | 60.21 | 59.00 | 30 | 113 | 64.98 | 15.39 |
+| place_randomly | 1000 | 1.10 | 0.00 | 0 | 15 | 0.09 | 10737.16 |
+| go_up_randomly | 1000 | 14.90 | 13.00 | 1 | 57 | 0.10 | 10129.40 |
+| edges_then_up | 1000 | 56.78 | 55.00 | 23 | 97 | 0.12 | 8046.98 |
+| solid_base_high_top | 1000 | 48.93 | 47.00 | 14 | 107 | 0.16 | 6111.65 |
+| maximize_lookahead | 1000 | 60.21 | 59.00 | 30 | 113 | 51.36 | 19.47 |
+| low_to_base | 1000 | 62.74 | 61.00 | 33 | 115 | 0.12 | 8029.16 |
+| monte_carlo | 1000 | 86.41 | 86.00 | 54 | 142 | 505.86 | 1.98 |
+| keep_support | 1000 | 64.78 | 63.00 | 35 | 125 | 0.70 | 1419.30 |
 <!-- benchmarks:end -->
-
-## history
-
-The engine was first written in Python (`num9/`, removed after the port;
-see the git history). Its last benchmark, 100 games per strategy:
-
-| strategy | games | avg | median | min | max | time (s) | games/s |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| place_randomly | 100 | 1.05 | 0.00 | 0 | 9 | 272.12 | 0.37 |
-| go_up_randomly | 100 | 15.49 | 12.00 | 2 | 44 | 174.16 | 0.57 |
-| edges_then_up | 100 | 58.13 | 57.00 | 36 | 97 | 152.75 | 0.65 |
-| solid_base_high_top | 100 | 50.37 | 50.00 | 26 | 81 | 210.58 | 0.47 |
-
-Head-to-head on the same 8-core machine, before the Python engine was removed:
-
-| | Python | Rust (via Python) | speedup |
-| --- | --- | --- | --- |
-| `find_valid_moves` | 103 ms / call | 44 µs / call | ~2,400× |
-| edges_then_up game | 0.48 games/s | 1,167 games/s (4,192 on 8 threads) | ~2,400× |
-| solid_base_high_top game | 0.40 games/s | 1,151 games/s (4,039 on 8 threads) | ~2,900× |
-| maximize_lookahead game | ~47 min / game (est.) | 1.2 games/s | ~3,300× |

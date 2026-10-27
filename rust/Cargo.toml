@@ -21,6 +21,14 @@ name = "bench"
 path = "src/bin/bench.rs"
 
 [[bin]]
+name = "arena"
+path = "src/bin/arena.rs"
+
+[[bin]]
+name = "decisions"
+path = "src/bin/decisions.rs"
+
+[[bin]]
 name = "solve"
 path = "src/bin/solve.rs"
 
