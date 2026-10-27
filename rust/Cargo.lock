@@ -835,6 +835,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "num9-web"
+version = "0.1.0"
+dependencies = [
+ "num9-core",
+]
+
+[[package]]
 name = "num_threads"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

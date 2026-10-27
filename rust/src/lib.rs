@@ -6,6 +6,8 @@
 //! the Python engine before it was removed.
 
 pub mod board;
+pub mod exact;
+pub mod freeorder;
 pub mod game;
 pub mod nrpa;
 pub mod piece;

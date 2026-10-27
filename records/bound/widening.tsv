@@ -1,0 +1,340 @@
+single	0	0
+single	1	5
+single	2	4
+single	3	4
+single	4	4
+single	5	3
+single	6	3
+single	7	5
+single	8	6
+single	9	3
+pair	0	0	0
+pair	0	1	3
+pair	0	2	2
+pair	0	3	3
+pair	0	4	2
+pair	0	5	2
+pair	0	6	1
+pair	0	7	4
+pair	0	8	4
+pair	0	9	2
+pair	1	1	4
+pair	1	2	3
+pair	1	3	4
+pair	1	4	2
+pair	1	5	2
+pair	1	6	1
+pair	1	7	5
+pair	1	8	4
+pair	1	9	3
+pair	2	2	2
+pair	2	3	3
+pair	2	4	3
+pair	2	5	2
+pair	2	6	2
+pair	2	7	4
+pair	2	8	3
+pair	2	9	1
+pair	3	3	2
+pair	3	4	2
+pair	3	5	1
+pair	3	6	2
+pair	3	7	4
+pair	3	8	3
+pair	3	9	2
+pair	4	4	3
+pair	4	5	2
+pair	4	6	2
+pair	4	7	3
+pair	4	8	3
+pair	4	9	2
+pair	5	5	2
+pair	5	6	1
+pair	5	7	3
+pair	5	8	4
+pair	5	9	2
+pair	6	6	2
+pair	6	7	4
+pair	6	8	4
+pair	6	9	1
+pair	7	7	4
+pair	7	8	4
+pair	7	9	3
+pair	8	8	0
+pair	8	9	2
+pair	9	9	0
+supports	0	0	14
+supports	0	1	14
+supports	0	2	12
+supports	0	3	14
+supports	0	4	15
+supports	0	5	15
+supports	0	6	15
+supports	0	7	10
+supports	0	8	10
+supports	0	9	15
+supports	1	1	10
+supports	1	2	10
+supports	1	3	10
+supports	1	4	10
+supports	1	5	13
+supports	1	6	10
+supports	1	7	9
+supports	1	8	10
+supports	1	9	14
+supports	2	2	16
+supports	2	3	12
+supports	2	4	15
+supports	2	5	15
+supports	2	6	12
+supports	2	7	10
+supports	2	8	16
+supports	2	9	16
+supports	3	3	14
+supports	3	4	10
+supports	3	5	15
+supports	3	6	13
+supports	3	7	10
+supports	3	8	12
+supports	3	9	14
+supports	4	4	10
+supports	4	5	15
+supports	4	6	15
+supports	4	7	10
+supports	4	8	10
+supports	4	9	15
+supports	5	5	16
+supports	5	6	15
+supports	5	7	10
+supports	5	8	10
+supports	5	9	15
+supports	6	6	15
+supports	6	7	10
+supports	6	8	10
+supports	6	9	15
+supports	7	7	10
+supports	7	8	10
+supports	7	9	15
+supports	8	8	16
+supports	8	9	16
+supports	9	9	20
+supports3	0	0	0	28
+supports3	0	0	1	24
+supports3	0	0	2	24
+supports3	0	0	3	25
+supports3	0	0	4	25
+supports3	0	0	5	27
+supports3	0	0	6	27
+supports3	0	0	7	24
+supports3	0	0	8	24
+supports3	0	0	9	28
+supports3	0	1	1	19
+supports3	0	1	2	24
+supports3	0	1	3	22
+supports3	0	1	4	21
+supports3	0	1	5	25
+supports3	0	1	6	24
+supports3	0	1	7	19
+supports3	0	1	8	23
+supports3	0	1	9	24
+supports3	0	2	2	25
+supports3	0	2	3	25
+supports3	0	2	4	25
+supports3	0	2	5	26
+supports3	0	2	6	25
+supports3	0	2	7	22
+supports3	0	2	8	25
+supports3	0	2	9	29
+supports3	0	3	3	25
+supports3	0	3	4	25
+supports3	0	3	5	25
+supports3	0	3	6	25
+supports3	0	3	7	24
+supports3	0	3	8	24
+supports3	0	3	9	25
+supports3	0	4	4	24
+supports3	0	4	5	25
+supports3	0	4	6	26
+supports3	0	4	7	23
+supports3	0	4	8	24
+supports3	0	4	9	25
+supports3	0	5	5	27
+supports3	0	5	6	27
+supports3	0	5	7	24
+supports3	0	5	8	25
+supports3	0	5	9	27
+supports3	0	6	6	25
+supports3	0	6	7	23
+supports3	0	6	8	25
+supports3	0	6	9	27
+supports3	0	7	7	20
+supports3	0	7	8	20
+supports3	0	7	9	25
+supports3	0	8	8	24
+supports3	0	8	9	26
+supports3	0	9	9	29
+supports3	1	1	1	14
+supports3	1	1	2	17
+supports3	1	1	3	15
+supports3	1	1	4	17
+supports3	1	1	5	18
+supports3	1	1	6	17
+supports3	1	1	7	15
+supports3	1	1	8	15
+supports3	1	1	9	19
+supports3	1	2	2	21
+supports3	1	2	3	20
+supports3	1	2	4	20
+supports3	1	2	5	23
+supports3	1	2	6	20
+supports3	1	2	7	19
+supports3	1	2	8	21
+supports3	1	2	9	24
+supports3	1	3	3	20
+supports3	1	3	4	20
+supports3	1	3	5	21
+supports3	1	3	6	20
+supports3	1	3	7	19
+supports3	1	3	8	20
+supports3	1	3	9	22
+supports3	1	4	4	19
+supports3	1	4	5	20
+supports3	1	4	6	20
+supports3	1	4	7	18
+supports3	1	4	8	19
+supports3	1	4	9	21
+supports3	1	5	5	24
+supports3	1	5	6	23
+supports3	1	5	7	19
+supports3	1	5	8	22
+supports3	1	5	9	25
+supports3	1	6	6	20
+supports3	1	6	7	19
+supports3	1	6	8	20
+supports3	1	6	9	24
+supports3	1	7	7	17
+supports3	1	7	8	19
+supports3	1	7	9	20
+supports3	1	8	8	20
+supports3	1	8	9	23
+supports3	1	9	9	24
+supports3	2	2	2	26
+supports3	2	2	3	24
+supports3	2	2	4	24
+supports3	2	2	5	25
+supports3	2	2	6	26
+supports3	2	2	7	23
+supports3	2	2	8	26
+supports3	2	2	9	26
+supports3	2	3	3	24
+supports3	2	3	4	24
+supports3	2	3	5	25
+supports3	2	3	6	23
+supports3	2	3	7	22
+supports3	2	3	8	23
+supports3	2	3	9	25
+supports3	2	4	4	23
+supports3	2	4	5	25
+supports3	2	4	6	25
+supports3	2	4	7	22
+supports3	2	4	8	24
+supports3	2	4	9	25
+supports3	2	5	5	26
+supports3	2	5	6	25
+supports3	2	5	7	23
+supports3	2	5	8	25
+supports3	2	5	9	28
+supports3	2	6	6	25
+supports3	2	6	7	23
+supports3	2	6	8	26
+supports3	2	6	9	26
+supports3	2	7	7	20
+supports3	2	7	8	23
+supports3	2	7	9	25
+supports3	2	8	8	25
+supports3	2	8	9	26
+supports3	2	9	9	29
+supports3	3	3	3	23
+supports3	3	3	4	23
+supports3	3	3	5	25
+supports3	3	3	6	24
+supports3	3	3	7	22
+supports3	3	3	8	23
+supports3	3	3	9	25
+supports3	3	4	4	22
+supports3	3	4	5	25
+supports3	3	4	6	25
+supports3	3	4	7	20
+supports3	3	4	8	22
+supports3	3	4	9	25
+supports3	3	5	5	25
+supports3	3	5	6	25
+supports3	3	5	7	23
+supports3	3	5	8	24
+supports3	3	5	9	25
+supports3	3	6	6	25
+supports3	3	6	7	23
+supports3	3	6	8	23
+supports3	3	6	9	25
+supports3	3	7	7	20
+supports3	3	7	8	22
+supports3	3	7	9	24
+supports3	3	8	8	22
+supports3	3	8	9	25
+supports3	3	9	9	26
+supports3	4	4	4	20
+supports3	4	4	5	24
+supports3	4	4	6	24
+supports3	4	4	7	20
+supports3	4	4	8	20
+supports3	4	4	9	24
+supports3	4	5	5	25
+supports3	4	5	6	25
+supports3	4	5	7	23
+supports3	4	5	8	25
+supports3	4	5	9	25
+supports3	4	6	6	25
+supports3	4	6	7	23
+supports3	4	6	8	25
+supports3	4	6	9	26
+supports3	4	7	7	20
+supports3	4	7	8	20
+supports3	4	7	9	23
+supports3	4	8	8	21
+supports3	4	8	9	25
+supports3	4	9	9	27
+supports3	5	5	5	26
+supports3	5	5	6	26
+supports3	5	5	7	25
+supports3	5	5	8	26
+supports3	5	5	9	28
+supports3	5	6	6	25
+supports3	5	6	7	24
+supports3	5	6	8	25
+supports3	5	6	9	28
+supports3	5	7	7	20
+supports3	5	7	8	20
+supports3	5	7	9	25
+supports3	5	8	8	23
+supports3	5	8	9	25
+supports3	5	9	9	28
+supports3	6	6	6	25
+supports3	6	6	7	23
+supports3	6	6	8	25
+supports3	6	6	9	26
+supports3	6	7	7	20
+supports3	6	7	8	20
+supports3	6	7	9	25
+supports3	6	8	8	24
+supports3	6	8	9	26
+supports3	6	9	9	28
+supports3	7	7	7	18
+supports3	7	7	8	20
+supports3	7	7	9	23
+supports3	7	8	8	21
+supports3	7	8	9	24
+supports3	7	9	9	25
+supports3	8	8	8	24
+supports3	8	8	9	26
+supports3	8	9	9	28
+supports3	9	9	9	29

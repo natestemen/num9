@@ -168,6 +168,19 @@ impl Nested {
             let rest = &tiles[step + 1..];
             let results: Vec<Solution> = if stop.load(Ordering::Relaxed) {
                 Vec::new()
+            } else if self.threads <= 1 {
+                // No threads (e.g. in WebAssembly, which can't spawn them).
+                let mut b = board.clone();
+                cands
+                    .iter()
+                    .enumerate()
+                    .map(|(c, &mv)| {
+                        b.place(value, mv).expect("legal move");
+                        let sub = self.search(&mut b, rest, self.level - 1, mix(seed, step, c));
+                        b.undo();
+                        sub
+                    })
+                    .collect()
             } else {
                 let threads = self.threads.clamp(1, cands.len().max(1));
                 let chunk = cands.len().div_ceil(threads).max(1);

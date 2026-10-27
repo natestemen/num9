@@ -1,0 +1,12 @@
+[package]
+name = "num9-web"
+version = "0.1.0"
+edition = "2021"
+description = "The num9 engine compiled to WebAssembly for the website"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+num9-core = { path = ".." }

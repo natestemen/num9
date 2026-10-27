@@ -25,7 +25,7 @@ use num9_core::tower::TowerSearch;
 
 fn usage() -> ! {
     eprintln!(
-        "usage: tower [--tops a,b,...] [--width W] [--per-design K] [--nodes N] [--area-cost C] \
+        "usage: tower [--tops a,b,...] [--counts a,b,...] [--width W] [--per-design K] [--nodes N] [--area-cost C] \
          [--growth G] [--noise J] [--seed S] [--out FILE] [--record-above SCORE] [--record-dir DIR]"
     );
     std::process::exit(2)
@@ -216,7 +216,11 @@ impl Recorder {
         {
             return None;
         }
-        verify(&Order::standard_free(), play).expect("plays are checked before recording");
+        let mut tiles = [0u8; 10];
+        for s in &play.steps {
+            tiles[s.0 as usize] += 1;
+        }
+        verify(&Order::Free(tiles), play).expect("plays are checked before recording");
         let top = play.steps.iter().map(|s| s.1.layer).max().unwrap_or(0);
         let path = self.dir.join(format!("{}-L{top}{suffix}", play.score));
         let text = format!(
@@ -280,6 +284,16 @@ fn main() {
                     .split(',')
                     .map(|t| t.parse().unwrap_or_else(|_| usage()))
                     .collect()
+            }
+            // A smaller deck: this many tiles of each value from 0 up.
+            "--counts" => {
+                search.tiles = [0; 10];
+                for (v, c) in value.split(',').enumerate() {
+                    if v >= 10 {
+                        usage();
+                    }
+                    search.tiles[v] = c.trim().parse().unwrap_or_else(|_| usage());
+                }
             }
             "--width" => width = num(),
             "--per-design" => per_design = num(),
@@ -351,7 +365,7 @@ fn main() {
         return;
     };
     assert_eq!(
-        verify(&Order::standard_free(), &best),
+        verify(&Order::Free(search.tiles), &best),
         Ok(best.score),
         "best play must be legal"
     );

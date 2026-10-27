@@ -124,7 +124,8 @@ impl Strategy {
     /// `monte_carlo:rollouts=128,policy=keep_support` or
     /// `keep_support:weight=0.2`. Settings: `max_low`, `endgame` (low_to_base,
     /// keep_support), `weight` (keep_support), `rollouts`, `per_layer`,
-    /// `policy` (monte_carlo; the policy is a plain strategy name).
+    /// `halving` (1 or 0), `policy` (monte_carlo; the policy is a plain
+    /// strategy name).
     pub fn from_spec(spec: &str) -> Result<Strategy, String> {
         let (name, settings) = spec.split_once(':').unwrap_or((spec, ""));
         let mut s =
@@ -152,6 +153,9 @@ impl Strategy {
                 }
                 (Strategy::MonteCarlo(mc), "per_layer") => {
                     mc.per_layer = value.parse().map_err(|_| bad())?
+                }
+                (Strategy::MonteCarlo(mc), "halving") => {
+                    mc.halving = value == "1" || value == "true"
                 }
                 (Strategy::MonteCarlo(mc), "policy") => {
                     *mc.policy = Strategy::from_name(value).ok_or_else(bad)?;

@@ -69,17 +69,47 @@ own game. **?** shows all the keys.
 To search a deal on its own: `cargo run --release --manifest-path
 rust/Cargo.toml --bin solve -- --seed 42 --level 3 --per-layer 8`.
 
+## website
+
+**[natestemen.github.io/num9](https://natestemen.github.io/num9/)**: the
+terminal game in the browser, running the same engine compiled to
+WebAssembly (`rust/web`). Play with hints, see how the engine and its search
+for the best play do on your deal, try the exactly solved small-deck
+puzzles, and step through the record plays. To build it locally (needs
+`rustup target add wasm32-unknown-unknown`):
+
+```sh
+site/build.sh                                  # into site/_site
+python3 -m http.server -d site/_site 8000      # then open localhost:8000
+```
+
+Pushes to `main` rebuild it and publish it to the `gh-pages` branch
+(`.github/workflows/website.yml`).
+
 ## records
 
 The maximum possible score, with the order of the tiles chosen freely, is an
 open problem ("Nmbr9 as a Constraint Programming Challenge", Lagerkvist 2020,
 cites 229 as the best known, from a BoardGameGeek thread). The `tower`
-command designs stacks from the top down and finds a play scoring **236**,
-reaching level 6: see `records/free-order-236.txt`, and check it with
-`python records/check_play.py records/free-order-236.txt` (standard library
-only, independent of the engine). To step through it in the terminal game:
-`cargo run --release --manifest-path rust/Cargo.toml -p num9-cli -- --replay
-records/free-order-236.txt` (or `num9 --replay ...` if installed).
+command designs stacks from the top down and found 236, and 1,038 distinct
+plays above 200 (`records/above-200`). Large neighbourhood search (`lns`)
+then improved one of those: it lifts off the top of a good stack, 6 to 12
+tiles, and puts them back in the best possible way (an exhaustive search
+from what's left), over and over. It turned a 230 into **241**, reaching
+level 6 with a 7 alone on top: see `records/free-order-241.txt`, and check it
+with `python records/check_play.py records/free-order-241.txt` (standard
+library only, independent of the engine). To step through it in the terminal
+game: `cargo run --release --manifest-path rust/Cargo.toml -p num9-cli --
+--replay records/free-order-241.txt` (or `num9 --replay ...` if installed).
+An hour more of the same found nothing higher.
+
+No play can score more than **354**. `records/bound/upper_bound.py` proves
+it with an integer program over which tiles go on which level, using shape
+facts computed exhaustively by `cargo run --release --bin widening` (how
+much wider the level below one or two tiles must be, and how much area a
+level of two or three tiles can hold up). The table is in
+`records/bound/widening.tsv`, and `records/bound/check_constraints.py`
+confirms every recorded play satisfies the constraints.
 
 ## testing
 
@@ -141,7 +171,7 @@ known or when it is free to choose:
 - `tower` (`num9_core::tower`): designs stacks from the top down for the
   highest possible score: chooses what goes on top, covers it as cheaply as
   possible level by level with a beam search, then turns the design into a
-  legal play. It found the 236 record.
+  legal play. It found 236 and the stacks `lns` improves.
 
 ## head to head
 

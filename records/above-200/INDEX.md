@@ -1,9 +1,12 @@
 # Plays scoring above 200 (free tile order)
 
-1038 distinct towers, best first. Rotations and shifts of the same tower count once; towers differing only in where a leftover tile sits count separately. Check any of them with `python records/check_play.py <file>` or step through it with `num9 --replay <file>`.
+1,041 distinct towers, best first. Rotations and shifts of the same tower count once; towers differing only in where a leftover tile sits count separately. Check any of them with `python records/check_play.py <file>` or step through it with `num9 --replay <file>`.
 
 | score | top level | file |
 | --- | --- | --- |
+| 241 | 6 | [241-L6-2208b0386460609d.txt](241-L6-2208b0386460609d.txt) |
+| 241 | 6 | [241-L6-b5ec14d1bba3b7da.txt](241-L6-b5ec14d1bba3b7da.txt) |
+| 241 | 6 | [241-L6-d766a054b0aa7039.txt](241-L6-d766a054b0aa7039.txt) |
 | 236 | 6 | [236-L6-011cfdd17b426083.txt](236-L6-011cfdd17b426083.txt) |
 | 236 | 6 | [236-L6-13d486f4f05c5879.txt](236-L6-13d486f4f05c5879.txt) |
 | 236 | 6 | [236-L6-4dd9e7d393217909.txt](236-L6-4dd9e7d393217909.txt) |
