@@ -1,7 +1,7 @@
 //! Large neighbourhood search for the highest free-order score:
 //!
 //!     cargo run --release --bin lns -- [--minutes M] [--budget NODES]
-//!         [--lift MIN,MAX] [--out DIR] RECORD_FILES...
+//!         [--lift MIN,MAX] [--sweep TRIES] [--out DIR] RECORD_FILES...
 //!
 //! Starts from recorded plays (the best stacks found so far) and improves
 //! them by destroying and repairing: lift off the top of a stack (every tile
@@ -13,6 +13,11 @@
 //! rebuild of a top scores more, the stack has improved. A pool of the best
 //! distinct stacks (equal scores included, so the search can drift along
 //! plateaus) supplies each step. Improvements are written to DIR.
+//!
+//! With --sweep, every stack instead gets a turn: each is improved on its
+//! own, step after step, until TRIES steps in a row fail to improve it, and
+//! what each became is written to DIR (when better) and summed up at the
+//! end.
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
@@ -28,7 +33,7 @@ use num9_core::Rng;
 
 fn usage() -> ! {
     eprintln!(
-        "usage: lns [--minutes M] [--budget NODES] [--lift MIN,MAX] [--out DIR] RECORD_FILES..."
+        "usage: lns [--minutes M] [--budget NODES] [--lift MIN,MAX] [--sweep TRIES] [--out DIR] RECORD_FILES..."
     );
     std::process::exit(2)
 }
@@ -173,6 +178,7 @@ fn main() {
     let mut budget = 20_000_000usize;
     let mut dir = String::from("runs/lns");
     let mut lift = (6, 12);
+    let mut sweep_tries = 0usize;
     let mut files = Vec::new();
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -181,6 +187,7 @@ fn main() {
             "--minutes" => minutes = value().parse().unwrap_or_else(|_| usage()),
             "--budget" => budget = value().parse().unwrap_or_else(|_| usage()),
             "--out" => dir = value(),
+            "--sweep" => sweep_tries = value().parse().unwrap_or_else(|_| usage()),
             "--lift" => {
                 let v = value();
                 let (a, b) = v.split_once(',').unwrap_or_else(|| usage());
@@ -214,6 +221,10 @@ fn main() {
         lift.0,
         lift.1
     );
+    if sweep_tries > 0 {
+        sweep(pool.stacks, sweep_tries, lift, budget, minutes, &dir);
+        return;
+    }
     let pool = Mutex::new(pool);
     let (steps, better, plateau, gave_up) = (
         AtomicUsize::new(0),
@@ -287,4 +298,69 @@ fn main() {
     });
     let p = pool.into_inner().unwrap();
     println!("done: best {} (started from {start_best})", p.stacks[0].0);
+}
+
+/// Improve every stack on its own (see --sweep), and sum up what each became.
+fn sweep(
+    stacks: Vec<(i64, Line)>,
+    tries: usize,
+    lift: (usize, usize),
+    budget: usize,
+    minutes: u64,
+    dir: &str,
+) {
+    let start = Instant::now();
+    let end = start + Duration::from_secs(minutes * 60);
+    let next = AtomicUsize::new(0);
+    let results: Mutex<Vec<(i64, i64)>> = Mutex::new(Vec::new());
+    let best = Mutex::new(stacks.first().map_or(0, |s| s.0));
+    let threads = thread::available_parallelism().map_or(1, |n| n.get());
+    thread::scope(|s| {
+        for t in 0..threads {
+            let (stacks, next, results, best) = (&stacks, &next, &results, &best);
+            s.spawn(move || {
+                let mut rng = Rng::new(start.elapsed().as_nanos() as u64 ^ (t as u64) << 40);
+                while Instant::now() < end {
+                    let Some((from, line)) = stacks.get(next.fetch_add(1, Relaxed)).cloned() else {
+                        break;
+                    };
+                    let (mut score_now, mut now, mut fails) = (from, line, 0);
+                    while fails < tries && Instant::now() < end {
+                        let Some((kept, removed)) = destroy(&now, lift, &mut rng) else {
+                            break;
+                        };
+                        match best_from(&kept, removed, score_now, budget, rng.next_u64() | 1) {
+                            Some((got, new)) => (score_now, now, fails) = (got, new, 0),
+                            None => fails += 1,
+                        }
+                    }
+                    if score_now > from {
+                        write(dir, &now);
+                        let mut b = best.lock().unwrap();
+                        let note = if score_now > *b { "  NEW BEST" } else { "" };
+                        *b = (*b).max(score_now);
+                        println!(
+                            "[{:6.0}s] {from} -> {score_now}{note}",
+                            start.elapsed().as_secs_f64()
+                        );
+                    }
+                    results.lock().unwrap().push((from, score_now));
+                }
+            });
+        }
+    });
+    let results = results.into_inner().unwrap();
+    let improved = results.iter().filter(|(a, b)| b > a).count();
+    let gain: i64 = results.iter().map(|(a, b)| b - a).sum();
+    let mut finals: Vec<i64> = results.iter().map(|r| r.1).collect();
+    finals.sort_unstable_by(|a, b| b.cmp(a));
+    println!(
+        "swept {} of {} stacks in {:.0}s: {improved} improved, by {:.1} on average when they were; best now {}; top ten {:?}",
+        results.len(),
+        stacks.len(),
+        start.elapsed().as_secs_f64(),
+        gain as f64 / improved.max(1) as f64,
+        finals.first().copied().unwrap_or(0),
+        &finals[..finals.len().min(10)]
+    );
 }
