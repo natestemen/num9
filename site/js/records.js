@@ -1,6 +1,5 @@
-// Recorded plays with the tiles in any order: the 236 record and every
-// distinct play above 200 that the search campaign found, replayed on the
-// game screen.
+// Recorded plays with the tiles in any order: the 241 record and the best
+// play for each of the next highest scores, replayed on the game screen.
 
 import { parsePlay } from "./game.js";
 import { PlayApp } from "./play.js";
@@ -29,7 +28,7 @@ export class RecordsApp {
 
   replayOf(k) {
     const p = this.data.plays[k];
-    const name = p.name === "free-order-236" ? "The 236 record" : `A ${p.score} play`;
+    const name = p.name === "free-order-241" ? "The 241 record" : `A ${p.score} play`;
     return { name, steps: parsePlay(p.moves) };
   }
 

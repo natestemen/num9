@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>NMBR 9 Engine</title>
-    <meta name="description" content="Play NMBR 9 in the browser with an engine that suggests the best move, solves small decks exactly and holds the free-order record of 236." />
+    <meta name="description" content="Play NMBR 9 in the browser with an engine that suggests the best move, solves small decks exactly and holds the free-order record of 241." />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23e53935'/><text x='8' y='12.5' font-size='12' font-family='monospace' font-weight='bold' text-anchor='middle' fill='white'>9</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -46,7 +46,7 @@
       <section id="records" hidden>
         <p class="intro">
           With the tiles placed in any order, how high can you score? The best previously reported was 229. The engine's
-          tower search found <b>236</b>, and <a href="https://github.com/natestemen/num9/blob/main/records/above-200/INDEX.md">1,038 distinct plays above 200</a>; here is the best of each of
+          searches found <b>241</b>, and <a href="https://github.com/natestemen/num9/blob/main/records/above-200/INDEX.md">over a thousand distinct plays above 200</a>; here is the best of each of
           the ten highest scores. No play can beat 354 (see About). Pick a play
           and step through it with <kbd>←</kbd> <kbd>→</kbd>.
         </p>
@@ -84,15 +84,16 @@
             With the order of the tiles free, the maximum score is an open problem. Lagerkvist's
             <em>Nmbr9 as a Constraint Programming Challenge</em> (2020) cites 229 as the best known. The engine designs stacks from
             the top down (choose what goes on the highest level, then cover it as cheaply as possible, level by level) and found
-            <b>236</b>, reaching level 6, along with <a href="https://github.com/natestemen/num9/blob/main/records/above-200/INDEX.md">1,038 distinct plays above 200</a>. The best are in
-            <a href="#records">Records</a>.
+            236 and over a thousand distinct plays above 200. A second search then improves good stacks: it lifts off the top six
+            to twelve tiles and puts them back in the best possible way (an exhaustive search), again and again. It turned a 230
+            into <b>241</b>, reaching level 6 with a 7 alone on top. They are in <a href="#records">Records</a>.
           </p>
           <p>
             In the other direction, <b>no play can score more than 354</b>. An integer program assigns tiles to levels to maximise
             the score, subject to facts every legal stack obeys. These include that a level is never larger than the one below it,
             and that anything above the ground rests on at least two tiles. The rest are shape facts computed by exhaustive search:
             how much wider the level below one or two tiles must be, and how much area a level of two or three tiles can hold up.
-            So the true maximum is somewhere between 236 and 354.
+            So the true maximum is somewhere between 241 and 354.
           </p>
 
           <h2>Small decks, solved</h2>
