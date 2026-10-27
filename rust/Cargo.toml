@@ -17,6 +17,10 @@ name = "freemax"
 path = "src/bin/freemax.rs"
 
 [[bin]]
+name = "lns"
+path = "src/bin/lns.rs"
+
+[[bin]]
 name = "bench"
 path = "src/bin/bench.rs"
 
