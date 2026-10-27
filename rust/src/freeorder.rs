@@ -144,6 +144,11 @@ struct Search {
     best: AtomicI64,
     line: Mutex<Line>,
     nodes: AtomicUsize,
+    /// Give up after this many positions (keeping the best found).
+    budget: usize,
+    /// Breaks ties in the order moves are tried (0: the engine's order), so
+    /// different searches find different plays among equally good ones.
+    salt: u64,
 }
 
 impl Search {
@@ -163,7 +168,9 @@ impl Search {
     }
 
     fn dfs(&self, board: &mut Board, left: &mut [u8; 10], path: &mut Line) {
-        self.nodes.fetch_add(1, Relaxed);
+        if self.nodes.fetch_add(1, Relaxed) >= self.budget {
+            return;
+        }
         let score = board.score();
         if remaining(left) == 0 {
             if score > self.best.load(Relaxed) {
@@ -191,7 +198,16 @@ impl Search {
             .flat_map(|v| moves(board, v).into_iter().map(move |m| (v, m)))
             .filter(|(_, m)| m.layer >= top)
             .collect();
-        options.sort_by_key(|&(v, m)| std::cmp::Reverse((m.layer, v)));
+        let jitter = |m: Move| {
+            let x = (m.i as u64) << 24 ^ (m.j as u64) << 8 ^ m.rot as u64;
+            (x ^ self.salt).wrapping_mul(0x9e37_79b9_7f4a_7c15) >> 32
+        };
+        options.sort_by_key(|&(v, m)| {
+            (
+                std::cmp::Reverse((m.layer, v)),
+                if self.salt == 0 { 0 } else { jitter(m) },
+            )
+        });
         for (v, m) in options {
             board.place(v, m).expect("legal move");
             left[v as usize] -= 1;
@@ -214,6 +230,8 @@ pub fn best_free(left: [u8; 10], known: Option<(i64, Line)>, threads: usize) -> 
         best: AtomicI64::new(best),
         line: Mutex::new(line),
         nodes: AtomicUsize::new(0),
+        budget: usize::MAX,
+        salt: 0,
     };
     // Split the work at the second tile: every pair of first two tiles,
     // shared out between the threads.
@@ -252,6 +270,36 @@ pub fn best_free(left: [u8; 10], known: Option<(i64, Line)>, threads: usize) -> 
     }
     let line = search.line.into_inner().unwrap();
     (search.best.load(Relaxed), line, search.nodes.load(Relaxed))
+}
+
+/// The best way to add the tiles `left` to the stack built by `start` (a
+/// legal play), placing them on its highest level or above, if it beats
+/// `to_beat`: the score and the whole play. Searches at most `budget`
+/// positions, so a result is the best found within it rather than proven;
+/// `salt` (non-zero) shuffles which of equally good plays turns up.
+pub fn best_from(
+    start: &Line,
+    left: [u8; 10],
+    to_beat: i64,
+    budget: usize,
+    salt: u64,
+) -> Option<(i64, Line)> {
+    let mut board = Board::new();
+    for &(v, m) in start {
+        board.place(v, m).ok()?;
+    }
+    let search = Search {
+        visited: (0..16).map(|_| Mutex::default()).collect(),
+        best: AtomicI64::new(to_beat),
+        line: Mutex::new(Vec::new()),
+        nodes: AtomicUsize::new(0),
+        budget,
+        salt,
+    };
+    let mut path = start.clone();
+    search.dfs(&mut board, &mut left.clone(), &mut path);
+    let best = search.best.load(Relaxed);
+    (best > to_beat).then(|| (best, search.line.into_inner().unwrap()))
 }
 
 #[cfg(test)]
@@ -308,5 +356,23 @@ mod tests {
         // on the others (15 cells), so 15; the shapes allow only 8, but a
         // ceiling only has to stay above.
         assert_eq!(ceiling(&[0, 0, 0, 0, 0, 0, 0, 2, 2, 0], 0, 0, 0), 15);
+    }
+
+    #[test]
+    fn rebuilding_the_top_finds_the_best_finish() {
+        // The best play of two each of 0-2, cut back to its first three
+        // tiles: the best way to add the other three is the best play's.
+        let left = [2, 2, 2, 0, 0, 0, 0, 0, 0, 0];
+        let (best, line, _) = best_free(left, None, 4);
+        let start: Line = line[..3].to_vec();
+        let mut rest = left;
+        for &(v, _) in &start {
+            rest[v as usize] -= 1;
+        }
+        let (score, again) = best_from(&start, rest, -1, usize::MAX, 0).unwrap();
+        assert!(score <= best);
+        assert_eq!(again[..3], start[..]);
+        // Asked to beat the best, it can't.
+        assert!(best_from(&start, rest, best, usize::MAX, 0).is_none());
     }
 }
