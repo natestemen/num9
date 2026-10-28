@@ -25,6 +25,10 @@ name = "window"
 path = "src/bin/window.rs"
 
 [[bin]]
+name = "plans"
+path = "src/bin/plans.rs"
+
+[[bin]]
 name = "bench"
 path = "src/bin/bench.rs"
 
