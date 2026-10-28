@@ -5,6 +5,7 @@ Search for the highest free-order NMBR 9 score with a constraint solver
     pip install ortools
     python records/cpsat.py [--size 12] [--levels 8] [--minutes 60]
         [--hint records/free-order-241.txt] [--at-least 242] [--out runs/cpsat]
+        [--height L]
 
 One yes/no variable for each placement of each tile (value, rotation, row,
 column, level) inside a size x size grid. Constraints, all rules of a
@@ -19,6 +20,9 @@ finished stack:
     must touch the piece).
 Objective: the score (value x level), at least --at-least. The --hint play
 is translated into the grid and given to the solver as a starting point.
+With --height L, there's no score to reach: any stack with a tile on level L
+will do (the grid gets levels 0 to L), so the solver finds one or shows none
+fits in the grid.
 Solutions are checked with check_play.py and written to --out; the solver's
 bound on the best score in the grid is reported too.
 """
@@ -80,7 +84,10 @@ def main():
     ap.add_argument("--at-least", type=int, default=242)
     ap.add_argument("--out", default="runs/cpsat")
     ap.add_argument("--workers", type=int, default=os.cpu_count())
+    ap.add_argument("--height", type=int)
     args = ap.parse_args()
+    if args.height is not None:
+        args.levels = args.height + 1
     n, levels = args.size, args.levels
     os.makedirs(args.out, exist_ok=True)
 
@@ -121,8 +128,11 @@ def main():
                 model.AddBoolOr([p[6].Not(), q[6].Not()])
                 pairs += 1
     score = sum(p[0] * p[4] * p[6] for p in places)
-    model.Add(score >= args.at_least)
-    model.Maximize(score)
+    if args.height is None:
+        model.Add(score >= args.at_least)
+        model.Maximize(score)
+    else:
+        model.Add(sum(p[6] for p in places if p[4] == args.height) >= 1)
     print(f"{pairs} single-support exclusions")
 
     # The hint: the play moved into the middle of the grid.
@@ -144,9 +154,10 @@ def main():
         solver.parameters.max_time_in_seconds = max(1.0, deadline - time.time())
         solver.parameters.num_workers = args.workers
         status = solver.Solve(model)
-        bound = solver.BestObjectiveBound()
+        bound = solver.BestObjectiveBound() if args.height is None else 0
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            what = "no stack scores that much" if status == cp_model.INFEASIBLE else "nothing found in time"
+            goal = "is that tall" if args.height is not None else "scores that much"
+            what = f"no stack in the grid {goal}" if status == cp_model.INFEASIBLE else "nothing found in time"
             print(f"round {rounds}: {what} (status {solver.StatusName(status)}, bound {bound:.0f}) after {time.time() - start:.0f}s")
             break
         chosen = [p for p in places if solver.Value(p[6])]
@@ -183,6 +194,8 @@ def main():
             open(path, "w").write(text)
             print(f"  a legal stack scoring {got} ({ok}), saved to {path}")
             best = got
+            if args.height is not None:
+                break
             if status == cp_model.OPTIMAL:
                 print(f"  optimal in this grid")
                 break
