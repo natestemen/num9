@@ -4,11 +4,13 @@
 // it, the engine plays the rest of the game out from each candidate move,
 // the player's own included (the same Monte Carlo rollouts as the hints),
 // and the player's move is judged by the expected final points it gave away
-// compared with the engine's best. That loss plays the part of a chess
-// engine's centipawn loss: it grades each move (best, excellent, good,
+// compared with the engine's own pick. That loss plays the part of a chess
+// engine's centipawn loss: it grades each move (engine's pick, excellent, good,
 // inaccuracy, mistake, blunder), gives the game an accuracy, draws an
 // evaluation graph, and points at the moments that mattered. Each moment
 // gets a reason in words and can be replayed to look for a better move.
+// The engine is a strong heuristic, not perfect play, so the words used are
+// "the engine's pick", never "best".
 
 import { Game, TopView, cells, levels, samePlacement } from "./game.js";
 import { extent } from "./board.js";
@@ -22,7 +24,7 @@ const PER_LAYER = 6;
 
 /// Grades by expected points lost, as chess grades by centipawns.
 export const GRADES = [
-  { id: "best", name: "Best", mark: "!", max: 0.05, color: "rgb(120,220,120)" },
+  { id: "best", name: "Engine's pick", mark: "!", max: 0.05, color: "rgb(120,220,120)" },
   { id: "excellent", name: "Excellent", mark: "", max: 0.75, color: "rgb(150,210,120)" },
   { id: "good", name: "Good", mark: "", max: 2, color: "rgb(170,190,140)" },
   { id: "inaccuracy", name: "Inaccuracy", mark: "?!", max: 4, color: "rgb(240,200,80)" },
@@ -32,7 +34,7 @@ export const GRADES = [
 const FORCED = { id: "forced", name: "Only move", mark: "", max: 0, color: "rgb(140,145,160)" };
 const grade = (loss) => GRADES.find((g) => loss <= g.max);
 
-/// How good a move was, from 100 (the engine's best) down: an exponential
+/// How good a move was, from 100 (the engine's pick) down: an exponential
 /// in the points lost, like chess accuracy scores.
 const moveAccuracy = (loss) => 100 * Math.exp(-loss / 6);
 
@@ -161,7 +163,7 @@ export class GameAnalysis {
   }
 }
 
-/// What kind of slip a move was, by how it differs from the engine's best.
+/// What kind of slip a move was, by how it differs from the engine's pick.
 export function slip(m) {
   if (m.loss < 0.75) return null;
   if (m.best.layer > m.yours.layer) return "climb";
@@ -458,11 +460,11 @@ export class Coach {
 
     // The report card.
     let card;
-    if (!a.finished()) card = `<div>${ui.muted("Analysing your moves…")}</div>` + gauge(a.progress());
+    if (!a.finished()) card = scores(this.app) + `<div>${ui.muted("Analysing your moves…")}</div>` + gauge(a.progress());
     else {
       const acc = sum.accuracy;
-      card = `<div>Accuracy ${ui.bold(`${acc.toFixed(0)}%`, accColor(acc))}   ${ui.muted("points given away")} ${ui.bold(sum.lost.toFixed(1))}</div>`;
-      card += `<div>${ui.muted("(expected final points lost to the engine's best moves)")}</div>`;
+      card = scores(this.app) + `<div>Accuracy ${ui.bold(`${acc.toFixed(0)}%`, accColor(acc))}   ${ui.muted("points given away")} ${ui.bold(sum.lost.toFixed(1))}</div>`;
+      card += `<div>${ui.muted("(estimated final points lost, move by move, next to the engine's picks)")}</div>`;
       card += `<div class="grades">${GRADES.slice(3)
         .reverse()
         .map((g) => ui.span(plural(sum.counts[g.id], g.name.toLowerCase()), `color:${sum.counts[g.id] ? g.color : theme.MUTED}`))
@@ -470,14 +472,14 @@ export class Coach {
       card += `<div>${sum.phases.map((p) => `${ui.muted(p.name)} ${p.accuracy == null ? "–" : ui.bold(`${p.accuracy.toFixed(0)}%`, accColor(p.accuracy))}`).join("  ")}</div>`;
     }
     out += ui.box("Game analysis", `<div class="wrap">${card}</div>`);
-    out += ui.box("Expected final score", graph(a, this.step));
+    out += ui.box("Estimated final score", graph(a, this.step));
 
     // This move.
     let move = `<div>${ui.muted(`Tile ${this.step + 1} of ${n}:`)} ${ui.bold(`a ${a.tiles[this.step]}`, theme.valueCss(a.tiles[this.step]))}</div><div>${this.verdictLine(m)}</div>`;
     if (m && m.grade !== FORCED) {
       const row = (label, mv, e, color) =>
-        `<div>${ui.span(label.padEnd(6), `color:${color};font-weight:700`)}${ui.esc(lvl(mv, m.value).padEnd(16))}${ui.muted(`≈ ${e.toFixed(1)}`)}</div>`;
-      move += row("You", m.yours, m.eYours, "#fff") + row("Best", m.best, m.eBest, theme.HINT);
+        `<div>${ui.span(label.padEnd(7), `color:${color};font-weight:700`)}${ui.esc(lvl(mv, m.value).padEnd(16))}${ui.muted(`≈ ${e.toFixed(1)}`)}</div>`;
+      move += row("You", m.yours, m.eYours, "#fff") + row("Engine", m.best, m.eBest, theme.HINT);
       const r = this.retries[this.step];
       if (r) move += row("Retry", r.move, r.expected, r.grade.color);
     }
@@ -539,7 +541,7 @@ export class Coach {
     const m = this.current();
     const line1 = `${ui.muted(`Tile ${this.step + 1}:`)} ${ui.bold(`a ${a.tiles[this.step]}`, theme.valueCss(a.tiles[this.step]))}  ${this.verdictLine(m)}`;
     let line2 = "";
-    if (m && m.grade !== FORCED) line2 = `${ui.muted("you")} ${ui.esc(lvl(m.yours, m.value))}  ${ui.span(`best ${lvl(m.best, m.value)}`, `color:${theme.HINT}`)}`;
+    if (m && m.grade !== FORCED) line2 = `${ui.muted("you")} ${ui.esc(lvl(m.yours, m.value))}  ${ui.span(`engine ${lvl(m.best, m.value)}`, `color:${theme.HINT}`)}`;
     const sum = a.summary();
     const line3 = a.finished()
       ? `${ui.muted("accuracy")} ${ui.bold(`${sum.accuracy.toFixed(0)}%`, accColor(sum.accuracy))}  ${ui.muted("given away")} ${ui.bold(sum.lost.toFixed(1))}`
@@ -549,7 +551,7 @@ export class Coach {
 
   touchButtons() {
     if (this.practice) return [["↺", "R"], ["↻", " "], ["Try it", "Enter", "primary"], ["Cancel", "Escape"]];
-    const show = { both: "Both", yours: "Yours", best: "Best" }[this.show];
+    const show = { both: "Both", yours: "Yours", best: "Engine" }[this.show];
     return [["◀", "ArrowLeft"], ["▶", "ArrowRight", "primary"], ["Next ??", "m"], ["Retry", "r"], [show, "t"], ["Back", "Escape"], ["Info", "info"]];
   }
 
@@ -565,12 +567,29 @@ export class Coach {
     return [
       ["←→", "move by move", "ArrowRight"],
       ["↓↑ / m", "next / previous mistake", "m"],
-      ["t", "show yours / best / both", "t"],
+      ["t", "show yours / the engine's / both", "t"],
       ["r", "retry this move", "r"],
       ["v", "height map", "v"],
       ["esc", "back", "Escape"],
     ];
   }
+}
+
+/// The game's final scores, each said for what it is: yours, the engine's
+/// on the same tiles in the same order, and what the engine found with
+/// hindsight (every tile known in advance). Neither of the engine's is
+/// perfect play.
+function scores(app) {
+  const col = (label, s, color) => `${ui.muted(label)} ${ui.bold(s ?? "…", color)}`;
+  return (
+    `<div>${[
+      col("You", app.game.score(), theme.ACCENT),
+      ...(app.rival ? [col("Engine", app.rival.score)] : []),
+      ...(app.analysis ? [col("Hindsight", app.analysis.best?.score, theme.HINT)] : []),
+    ].join("   ")}</div>` +
+    `<div>${ui.muted("Engine: the computer playing these tiles in the same order. Hindsight: what it found knowing every tile in advance. Both are heuristics, not perfect play.")}</div>` +
+    `<div class="gap"></div>`
+  );
 }
 
 /// "2 mistakes", "1 inaccuracy", "3 inaccuracies".
@@ -588,7 +607,7 @@ function gauge(fraction) {
 }
 
 /// The evaluation graph: after each move, the expected final score of the
-/// engine's best move (cyan) and of yours (white), with the gap between them
+/// engine's pick (cyan) and of yours (white), with the gap between them
 /// shaded and each move's dot coloured by its grade. Click to jump.
 function graph(a, step) {
   const moves = a.positions.map((p) => a.move(p.k));
@@ -627,5 +646,5 @@ function graph(a, step) {
   for (let k = 1; k <= n; k++) {
     svg += `<rect data-step="${k}" x="${X(k) - (W / n) / 2}" y="0" width="${W / n}" height="${H}" fill="transparent"/>`;
   }
-  return `${svg}</svg><div class="legend">${ui.span("— best", `color:${theme.HINT}`)}  ${ui.span("— yours", "color:#fff")}  ${ui.muted("click a move")}</div>`;
+  return `${svg}</svg><div class="legend">${ui.span("— engine's pick", `color:${theme.HINT}`)}  ${ui.span("— yours", "color:#fff")}  ${ui.muted("click a move")}</div>`;
 }
