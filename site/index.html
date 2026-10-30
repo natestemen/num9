@@ -66,9 +66,8 @@
           <p>
             Ask for a hint and the engine plays the rest of the game out hundreds of times from each candidate placement,
             with the tiles still to come shuffled each time (Monte Carlo rollouts), then ranks the candidates by their average final
-            score. After a game it plays the same tiles itself, and, now that the order is known, searches that
-            exact deal with hindsight (nested Monte Carlo search), which you can step through next to your own. Both are
-            strong heuristics, not perfect play: the engine can be beaten, and so can its hindsight score.
+            score. After a game it plays the same tiles itself, in the same order and knowing no more than you did, and you can step
+            through its game next to your own. It's a strong heuristic, not perfect play: it can be beaten.
           </p>
 
           <h2>Game analysis</h2>
@@ -149,7 +148,7 @@
             <dt>c / ⌖</dt><dd>bring the stack back to the middle</dd>
             <dt>touch</dt><dd>tap to move the tile there, drag to slide it, tap the tile (or Place) to place it, pinch to zoom</dd>
             <dt>a</dt><dd>after a game: go through it move by move with the engine's verdict on each (m jumps to the next mistake, r retries a move)</dd>
-            <dt>b</dt><dd>after a game: step through the engine's hindsight play</dd>
+            <dt>b</dt><dd>after a game: step through your game next to the engine's (tab switches)</dd>
             <dt>n</dt><dd>new game</dd>
             <dt>l</dt><dd>share: a link to this deal, or after a game your score with a link to the same deal (the address bar holds the deal too)</dd>
             <dt>Challenges</dt><dd>on a computer, drag the tiles into a stack (scroll or space turns the one you hold) and press enter to submit it; on a phone, pick a tile with its number or by tapping it. s shows a best play, d goes to the next</dd>

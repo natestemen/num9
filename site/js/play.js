@@ -14,14 +14,6 @@ import * as ui from "./ui.js";
 
 /// How many of the engine's top moves the player can browse.
 export const SUGGESTIONS = 3;
-/// Search stages for the best play of a finished deal, as (nesting level,
-/// candidates per board level): quick passes first, then deeper ones.
-const STAGES = [
-  [1, 4],
-  [2, 4],
-  [2, 8],
-  [3, 8],
-];
 const HINT_ROLLOUTS = 256;
 
 const randomSeed = () => (Math.random() * 2 ** 32) >>> 0;
@@ -85,7 +77,6 @@ export class PlayApp {
     const lines = [`NMBR 9 · ${name}`];
     let scores = `I scored ${g.score()}`;
     if (this.rival?.score != null) scores += ` · the engine ${this.rival.score}`;
-    if (this.analysis?.best) scores += ` · hindsight ${this.analysis.best.score}`;
     lines.push(scores);
     const a = this.gameAnalysis;
     if (a?.finished()) {
@@ -105,7 +96,6 @@ export class PlayApp {
     this.showHint = false;
     this.suggestion = 0;
     this.rival = null;
-    this.analysis = null;
     this.review = null;
     this.hideSummary = false;
     this.message = null;
@@ -217,7 +207,7 @@ export class PlayApp {
 
   afterPlace() {}
 
-  /// The engine plays the same tiles, then searches for their best play.
+  /// The engine plays the same tiles, in the same order, to compare with.
   async gameOver() {
     const tiles = this.game.tiles;
     if (!this.replayName) {
@@ -225,35 +215,10 @@ export class PlayApp {
       this.gameAnalysis = new GameAnalysis(this.pool, this.engine, tiles, this.game.pieces, () => this.renderSoon());
     }
     this.rival = { score: null };
-    this.analysis = { best: null, stagesDone: 0, stages: STAGES.length };
     try {
       const played = await this.background.run({ type: "play", tiles, seed: this.seed });
       this.rival = { score: played.score, moves: played.moves };
-      // The engine's game is a play of this deal too: the best found so far.
-      this.analysis.best = { score: played.score, moves: played.moves };
       this.render();
-    } catch {
-      return; // stopped (new game or undo)
-    }
-    await this.searchBestPlay();
-  }
-
-  /// Search for the best play of the finished deal, in stages, showing each
-  /// improvement.
-  async searchBestPlay() {
-    this.analysis = { best: this.analysis?.best ?? null, stagesDone: 0, stages: STAGES.length };
-    try {
-      await this.background.run({ type: "analyze", tiles: this.game.tiles, stages: STAGES }, (m) => {
-        if (!this.analysis) return;
-        const better = (b) => !this.analysis.best || b.score > this.analysis.best.score;
-        if (m.type === "improved" && better(m)) this.analysis.best = { score: m.score, moves: m.moves };
-        if (m.type === "stage") {
-          this.analysis.stagesDone = m.stage;
-          if (better(m.best)) this.analysis.best = m.best;
-        }
-        if (this.review?.play === "best") this.showReview("best", this.review.step);
-        this.render();
-      });
     } catch {
       // Stopped (new game or undo).
     }
@@ -264,7 +229,6 @@ export class PlayApp {
       this.background.stop();
       this.stopCoach();
       this.rival = null;
-      this.analysis = null;
       this.review = null;
       this.showHint = false;
       this.say("Took the last tile back");
@@ -276,14 +240,14 @@ export class PlayApp {
 
   movesOf(play) {
     if (play === "yours") return this.game.pieces;
-    const best = this.analysis?.best;
-    return best ? best.moves.map((m, k) => ({ value: this.game.tiles[k], ...m })) : null;
+    const moves = this.rival?.moves;
+    return moves ? moves.map((m, k) => ({ value: this.game.tiles[k], ...m })) : null;
   }
 
   showReview(play, step) {
     const all = this.movesOf(play);
     if (!all) {
-      this.say("Still searching with hindsight…");
+      this.say("The engine is still playing these tiles…");
       return;
     }
     const n = this.game.tiles.length;
@@ -291,7 +255,7 @@ export class PlayApp {
     const pieces = all.slice(0, step);
     // Frame both plays the same way.
     let box;
-    for (const p of ["yours", "best"]) {
+    for (const p of ["yours", "engine"]) {
       const m = this.movesOf(p);
       if (m) box = extent(m, box);
     }
@@ -301,7 +265,7 @@ export class PlayApp {
 
   onReviewKey(key) {
     const { play, step } = this.review;
-    const other = play === "yours" ? "best" : "yours";
+    const other = play === "yours" ? "engine" : "yours";
     switch (key) {
       case "ArrowLeft":
       case "a":
@@ -319,7 +283,7 @@ export class PlayApp {
         break;
       case "Tab":
       case "b":
-        if (this.movesOf("best")) this.showReview(other, step);
+        if (this.movesOf("engine")) this.showReview(other, step);
         else this.heightMap = !this.heightMap;
         break;
       case "v":
@@ -375,7 +339,7 @@ export class PlayApp {
         if (!this.replayName) this.shareScore();
         break;
       case "b":
-        this.showReview(this.movesOf("best") ? "best" : "yours", this.game.tiles.length);
+        this.showReview("yours", this.game.tiles.length);
         break;
       case "n":
         this.newGame();
@@ -746,7 +710,7 @@ export class PlayApp {
       const r = this.review;
       const v = g.tiles[r.step - 1];
       const m = r.pieces[r.step - 1];
-      const which = r.play === "best" ? "Hindsight" : this.yoursLabel();
+      const which = r.play === "engine" ? "Engine" : this.yoursLabel();
       const pts = v * m.layer;
       return (
         `<div>${ui.muted(`Tile ${r.step}/${g.tiles.length}:`)} ${ui.bold(`a ${v}`, theme.valueCss(v))} ${ui.esc(`level ${m.layer}${pts ? `  +${pts}` : ""}`)}</div>` +
@@ -790,9 +754,7 @@ export class PlayApp {
   /// After the game: how it compares.
   overLine() {
     if (this.replayName) return ui.muted("Swipe or ◀ ▶ to step through it");
-    const ai = this.rival?.score;
-    const best = this.analysis?.best?.score;
-    return `${ui.muted("engine")} ${ui.bold(ai ?? "…")}  ${ui.muted("hindsight")} ${ui.bold(best ?? "…", theme.HINT)}`;
+    return `${ui.muted("engine")} ${ui.bold(this.rival?.score ?? "…", theme.HINT)}`;
   }
 
   /// Buttons for touch screens.
@@ -800,12 +762,12 @@ export class PlayApp {
     if (this.coachOn) return this.coach.touchButtons();
     const info = ["Info", "info"];
     if (this.review) {
-      const other = this.movesOf("best") ? ["Switch", "Tab"] : ["Map", "Tab"];
+      const other = this.movesOf("engine") ? ["Switch", "Tab"] : ["Map", "Tab"];
       return [["◀", "ArrowLeft"], ["▶", "ArrowRight", "primary"], ["⏮", "Home"], ["⏭", "End"], other, ["Back", "Escape"], info];
     }
     if (this.game.isOver()) {
       if (this.replayName) return [["Step through", "b", "primary"], info];
-      return [["Analysis", "a", "primary"], ["Share", "l"], ["Hindsight", "b"], ["New", "n"], ["Again", "r"], info];
+      return [["Analysis", "a", "primary"], ["Share", "l"], ["Review", "b"], ["New", "n"], ["Again", "r"], info];
     }
     const hint = this.showHint && this.currentHint() ? ["Next", "g"] : ["Hint", "h"];
     return [["↺", "R"], ["↻", " "], hint, ["Place", "Enter", "primary"], ["Undo", "u"], ["New", "n"], info];
@@ -817,7 +779,7 @@ export class PlayApp {
     const n = g.tiles.length;
     if (this.review) {
       const r = this.review;
-      const which = r.play === "best" ? "Hindsight play" : this.yoursTitle();
+      const which = r.play === "engine" ? "The engine's game" : this.yoursTitle();
       this.s.title.textContent = `${which} · tile ${r.step} of ${n}${this.heightMap ? " · height map" : ""}`;
       this.view.draw(r.pieces, r.top, { heightMap: this.heightMap, spotlight: this.spotlight() });
       return;
@@ -908,7 +870,7 @@ export class PlayApp {
     const k = r.step - 1;
     const value = g.tiles[k];
     const yours = this.movesOf("yours");
-    const best = this.movesOf("best");
+    const engine = this.movesOf("engine");
     const after = (moves) => score(moves.slice(0, r.step));
     const describeAt = (m) => (m ? (m.layer && value ? `level ${m.layer}  +${value * m.layer}` : `level ${m.layer}`) : "…");
     const row = (label, play, m, total) => {
@@ -918,26 +880,22 @@ export class PlayApp {
     };
     let out = `<div>${ui.muted(`Tile ${r.step} of ${n}: `)}${ui.bold(`a ${value}`, theme.valueCss(value))}</div><div class="gap"></div>`;
     out += row(this.yoursLabel(), "yours", yours[k], after(yours));
-    if (this.analysis) out += row("Hindsight", "best", best?.[k], best ? after(best) : null);
+    if (this.rival) out += row("Engine", "engine", engine?.[k], engine ? after(engine) : null);
     out += `<div class="gap"></div>`;
     const finalLine = (label, s) => `<div>  ${ui.esc(label.padEnd(12))}${ui.bold(s ?? "…")}</div>`;
     if (this.replayName) out += finalLine("Final score", g.score());
     else {
       out += `<div>${ui.muted("Final scores")}</div>` + finalLine(this.yoursLabel(), g.score());
       if (this.rival) out += finalLine("Engine", this.rival.score);
-      if (this.analysis) out += finalLine("Hindsight", this.analysis.best?.score);
     }
     out += `<div class="gap"></div>${ui.levelLines(levels(r.pieces))}`;
-    if (this.analysis && this.analysis.stagesDone < this.analysis.stages) {
-      out += `<div class="gap"></div><div>${ui.muted("Still searching for a better play…")}</div>`;
-    }
     return ui.box("Review", out, "grow") + this.messageLine();
   }
 
   keys() {
     if (this.coachOn) return this.coach.keys();
     const g = this.game;
-    if (this.review && !this.analysis) {
+    if (this.review && !this.rival) {
       return [
         ["←→", "step", "ArrowRight"],
         ["home/end", "first/last", "Home"],
@@ -949,7 +907,7 @@ export class PlayApp {
       return [
         ["←→", "step", "ArrowRight"],
         ["home/end", "first/last", "Home"],
-        ["tab", "your game / hindsight play", "Tab"],
+        ["tab", "your game / the engine's", "Tab"],
         ["v", "view", "v"],
         ["esc", "back", "Escape"],
       ];
@@ -964,7 +922,7 @@ export class PlayApp {
       return [
         ["a", "game analysis", "a"],
         ["l", "share your score", "l"],
-        ["b", "review the hindsight play", "b"],
+        ["b", "review next to the engine", "b"],
         ["n", "new game", "n"],
         ["r", "replay tiles", "r"],
         ["esc", "show/hide summary", "Escape"],
@@ -1019,11 +977,6 @@ export class PlayApp {
         s > ai ? [`you won by ${s - ai}!`, theme.GOOD] : s === ai ? ["a tie!", theme.ACCENT] : [`it won by ${ai - s}`, theme.BAD];
       out += `<div>The engine scored ${ai} on these tiles: ${ui.bold(verdict, color)}</div>`;
     }
-    const best = this.analysis?.best;
-    if (best) {
-      const searching = this.analysis.stagesDone < this.analysis.stages;
-      out += `<div>With hindsight (every tile known in advance), the engine found ${ui.bold(best.score, theme.HINT)}${searching ? ui.muted("  (still searching…)") : ""}</div>`;
-    } else out += `<div>${ui.muted("Searching these tiles with hindsight…")}</div>`;
     const a = this.gameAnalysis;
     if (a) {
       out += `<div class="gap"></div>`;
@@ -1039,7 +992,7 @@ export class PlayApp {
     out += actions([
       ...(a ? [["a", "game analysis"]] : []),
       ["l", "share your score"],
-      ["b", "review the hindsight play"],
+      ["b", "review next to the engine's game"],
       ["n", "new game"],
       ["r", "replay these tiles"],
       ["esc", "view board", "Escape"],

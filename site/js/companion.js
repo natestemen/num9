@@ -90,7 +90,6 @@ export class CompanionApp extends PlayApp {
     this.game.place();
     this.lastMove = { value: h.value, move: best.move, expected: h.forced() ? null : best.expected };
     this.view.centre(extent(this.game.pieces));
-    if (this.done()) this.searchBestPlay();
     this.render();
     this.pump();
   }
@@ -111,7 +110,6 @@ export class CompanionApp extends PlayApp {
         this.view.centre(extent(this.game.pieces));
       }
       this.background.stop();
-      this.analysis = null;
       this.review = null;
       this.yourScore = null;
       this.lastMove = null;
@@ -152,7 +150,7 @@ export class CompanionApp extends PlayApp {
           this.hidden = !this.hidden;
           break;
         case "b":
-          if (this.done()) this.showReview(this.movesOf("best") ? "best" : "yours", TILES);
+          if (this.done()) this.showReview("yours", TILES);
           break;
         case "l":
           if (this.done()) this.shareResult();
@@ -192,7 +190,6 @@ export class CompanionApp extends PlayApp {
     const you = this.yourScore;
     const lines = ["NMBR 9 at the table, against the engine"];
     lines.push(you == null ? `The engine scored ${ai}` : `I scored ${you} · the engine ${ai}${you > ai ? " · I won!" : ""}`);
-    if (this.analysis?.best) lines.push(`With hindsight: ${this.analysis.best.score}`);
     lines.push(squares(this.game.pieces), "Play the same cards:");
     const outcome = await share(lines.join("\n"), link(`play/t/${dealCode(this.cards)}`));
     this.say(...said(outcome, "the result"));
@@ -384,11 +381,6 @@ export class CompanionApp extends PlayApp {
     out += `<div>The engine scored ${ui.bold(g.score(), theme.ACCENT)}</div><div class="gap"></div>`;
     out += ui.levelLines(g.levels()) + `<div class="gap"></div>`;
     out += `<div>${this.verdict()}</div>`;
-    const best = this.analysis?.best;
-    if (best) {
-      const searching = this.analysis.stagesDone < this.analysis.stages;
-      out += `<div>With hindsight (every card known in advance), the engine found ${ui.bold(best.score, theme.HINT)}${searching ? ui.muted("  (still searching…)") : ""}</div>`;
-    } else out += `<div>${ui.muted("Searching these cards with hindsight…")}</div>`;
     out += `<div class="gap"></div><div class="actions">${[
       ["b", "step through the engine's play"],
       ["l", "share the result"],

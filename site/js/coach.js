@@ -575,19 +575,16 @@ export class Coach {
   }
 }
 
-/// The game's final scores, each said for what it is: yours, the engine's
-/// on the same tiles in the same order, and what the engine found with
-/// hindsight (every tile known in advance). Neither of the engine's is
-/// perfect play.
+/// The game's final scores: yours, and the engine's on the same tiles in the
+/// same order (not perfect play).
 function scores(app) {
   const col = (label, s, color) => `${ui.muted(label)} ${ui.bold(s ?? "…", color)}`;
   return (
     `<div>${[
       col("You", app.game.score(), theme.ACCENT),
-      ...(app.rival ? [col("Engine", app.rival.score)] : []),
-      ...(app.analysis ? [col("Hindsight", app.analysis.best?.score, theme.HINT)] : []),
+      ...(app.rival ? [col("Engine", app.rival.score, theme.HINT)] : []),
     ].join("   ")}</div>` +
-    `<div>${ui.muted("Engine: the computer playing these tiles in the same order. Hindsight: what it found knowing every tile in advance. Both are heuristics, not perfect play.")}</div>` +
+    `<div>${ui.muted("Engine: the computer playing these tiles in the same order, knowing no more than you did. It's a strong heuristic, not perfect play.")}</div>` +
     `<div class="gap"></div>`
   );
 }
