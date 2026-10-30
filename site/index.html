@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>NMBR 9 Engine</title>
-    <meta name="description" content="Play NMBR 9 in the browser with an engine that suggests the best move, solves small decks exactly and holds the free-order record of 241." />
+    <meta name="description" content="Play NMBR 9 in the browser with an engine that suggests moves, solves small decks exactly and holds the free-order record of 241." />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23e53935'/><text x='8' y='12.5' font-size='12' font-family='monospace' font-weight='bold' text-anchor='middle' fill='white'>9</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -64,17 +64,18 @@
 
           <h2>Hints</h2>
           <p>
-            Ask for the best move and the engine plays the rest of the game out hundreds of times from each candidate placement,
+            Ask for a hint and the engine plays the rest of the game out hundreds of times from each candidate placement,
             with the tiles still to come shuffled each time (Monte Carlo rollouts), then ranks the candidates by their average final
-            score. After a game it plays the same tiles itself, and, now that the order is known, searches for the best play of that
-            exact deal (nested Monte Carlo search), which you can step through next to your own.
+            score. After a game it plays the same tiles itself, and, now that the order is known, searches that
+            exact deal with hindsight (nested Monte Carlo search), which you can step through next to your own. Both are
+            strong heuristics, not perfect play: the engine can be beaten, and so can its hindsight score.
           </p>
 
           <h2>Game analysis</h2>
           <p>
             After a game the engine goes back over every move, the way a chess engine reviews a game. It plays the rest of the game
             out from the position before each move, from your move and from the alternatives, and grades yours by the expected
-            final points it gave away: best, excellent, good, inaccuracy (?!), mistake (?) or blunder (??). That gives an accuracy
+            final points it gave away next to the engine's own pick: engine's pick, excellent, good, inaccuracy (?!), mistake (?) or blunder (??). That gives an accuracy
             for the game and for its opening, middle and end; a graph of the expected final score; a reason for each slip in words;
             the lessons that cost the most; and a way to retry any move to find a better one.
           </p>
@@ -141,14 +142,14 @@
             <dt>space / r</dt><dd>rotate clockwise (R: anticlockwise)</dd>
             <dt>enter</dt><dd>place the tile</dd>
             <dt>u</dt><dd>undo</dd>
-            <dt>h</dt><dd>ask the engine for the best move</dd>
+            <dt>h</dt><dd>ask the engine for its move</dd>
             <dt>g / 1-3</dt><dd>move the tile to the engine's picks</dd>
             <dt>tab</dt><dd>switch between tiles and height map</dd>
             <dt>mouse</dt><dd>hover to aim, click to place, drag to move the board, scroll or right-click to rotate</dd>
             <dt>c / ⌖</dt><dd>bring the stack back to the middle</dd>
             <dt>touch</dt><dd>tap to move the tile there, drag to slide it, tap the tile (or Place) to place it, pinch to zoom</dd>
             <dt>a</dt><dd>after a game: go through it move by move with the engine's verdict on each (m jumps to the next mistake, r retries a move)</dd>
-            <dt>b</dt><dd>after a game: step through the best play found</dd>
+            <dt>b</dt><dd>after a game: step through the engine's hindsight play</dd>
             <dt>n</dt><dd>new game</dd>
             <dt>l</dt><dd>share: a link to this deal, or after a game your score with a link to the same deal (the address bar holds the deal too)</dd>
             <dt>Challenges</dt><dd>on a computer, drag the tiles into a stack (scroll or space turns the one you hold) and press enter to submit it; on a phone, pick a tile with its number or by tapping it. s shows a best play, d goes to the next</dd>

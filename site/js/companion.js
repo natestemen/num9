@@ -192,7 +192,7 @@ export class CompanionApp extends PlayApp {
     const you = this.yourScore;
     const lines = ["NMBR 9 at the table, against the engine"];
     lines.push(you == null ? `The engine scored ${ai}` : `I scored ${you} · the engine ${ai}${you > ai ? " · I won!" : ""}`);
-    if (this.analysis?.best) lines.push(`Best found for these cards: ${this.analysis.best.score}`);
+    if (this.analysis?.best) lines.push(`With hindsight: ${this.analysis.best.score}`);
     lines.push(squares(this.game.pieces), "Play the same cards:");
     const outcome = await share(lines.join("\n"), link(`play/t/${dealCode(this.cards)}`));
     this.say(...said(outcome, "the result"));
@@ -387,8 +387,8 @@ export class CompanionApp extends PlayApp {
     const best = this.analysis?.best;
     if (best) {
       const searching = this.analysis.stagesDone < this.analysis.stages;
-      out += `<div>Best play found for these cards: ${ui.bold(best.score, theme.HINT)}${searching ? ui.muted("  (still searching…)") : ""}</div>`;
-    } else out += `<div>${ui.muted("Searching for the best play of these cards…")}</div>`;
+      out += `<div>With hindsight (every card known in advance), the engine found ${ui.bold(best.score, theme.HINT)}${searching ? ui.muted("  (still searching…)") : ""}</div>`;
+    } else out += `<div>${ui.muted("Searching these cards with hindsight…")}</div>`;
     out += `<div class="gap"></div><div class="actions">${[
       ["b", "step through the engine's play"],
       ["l", "share the result"],
