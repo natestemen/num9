@@ -599,6 +599,98 @@ impl TowerSearch {
     }
 }
 
+/// Build a stack to a plan, if one can be found: `plan[l]` are the tiles on
+/// level `l` for `l` from 1 to the top (which must hold one tile), and the
+/// rest of `deck` goes on the ground. Top-down and exhaustive: each level is
+/// built from its planned tiles to exactly cover the level above (each tile
+/// above resting on at least two); planned tiles a level doesn't need, and
+/// ground tiles covering level 1 doesn't need, are added at the end wherever
+/// they score most (as the tower search does). Stops after `nodes` steps.
+/// Returns the first stack found, with its score; or `Err(true)` if the
+/// budget ran out first, `Err(false)` if there is no such stack (in this
+/// top-down form: each tile on a level covers part of the level above).
+pub fn realize(
+    plan: &[[u8; 10]],
+    deck: [u8; 10],
+    mut nodes: usize,
+) -> Result<(i64, Vec<Step>), bool> {
+    let Some(top) = plan.len().checked_sub(1) else {
+        return Err(false);
+    };
+    if top == 0 || plan[top].iter().sum::<u8>() != 1 {
+        return Err(false);
+    }
+    let mut ground = deck;
+    for level in &plan[1..] {
+        for v in 0..10 {
+            ground[v] = ground[v].checked_sub(level[v]).ok_or(false)?;
+        }
+    }
+    let tiles_for = |layer: usize| if layer == 0 { ground } else { plan[layer] };
+    let area = |left: &[u8; 10]| {
+        (0..10)
+            .map(|v| left[v] as usize * shape(v as u8, 0).tiles as usize)
+            .sum::<usize>()
+    };
+    fn dfs(
+        d: &mut Design,
+        spare: [u8; 10],
+        tiles_for: &dyn Fn(usize) -> [u8; 10],
+        area: &dyn Fn(&[u8; 10]) -> usize,
+        nodes: &mut usize,
+    ) -> Option<(i64, Vec<Step>)> {
+        if *nodes == 0 {
+            return None;
+        }
+        *nodes -= 1;
+        if d.done {
+            return evaluate(d);
+        }
+        // The tiles left for this level must be able to cover what's left.
+        if area(&d.left) < d.uncovered() {
+            return None;
+        }
+        for c in d.choices() {
+            let saved = (d.layer, d.done, d.dead);
+            let left = d.left;
+            d.apply(c);
+            // A finished level's unused tiles become spares, placed at the
+            // end with the ground's.
+            let finished = d.done || d.layer != saved.0;
+            if !d.dead {
+                let mut spare = spare;
+                if finished && !d.done {
+                    for (s, l) in spare.iter_mut().zip(d.left) {
+                        *s += l;
+                    }
+                    d.left = tiles_for(d.layer);
+                    if d.layer == 0 {
+                        for (l, s) in d.left.iter_mut().zip(spare) {
+                            *l += s;
+                        }
+                    }
+                }
+                if let Some(found) = dfs(d, spare, tiles_for, area, nodes) {
+                    return Some(found);
+                }
+            }
+            // `undo` hands the tile back to `left`: restore it after.
+            d.undo(saved);
+            d.left = left;
+            if *nodes == 0 {
+                return None;
+            }
+        }
+        None
+    }
+    let mut d = Design::new(top, plan[top]);
+    // The top tile, unrotated: turning the whole stack changes nothing.
+    let v = (0..10).find(|&v| plan[top][v] > 0).ok_or(false)? as u8;
+    d.apply((v, 0, G / 2 - 2, G / 2 - 2));
+    d.left = tiles_for(d.layer);
+    dfs(&mut d, [0; 10], &tiles_for, &area, &mut nodes).ok_or(nodes == 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -642,5 +734,43 @@ mod tests {
         }
         // Four quarter turns give back the original placement (up to shift).
         assert_eq!(rotate_and_place(&[t], 4, (5, 9))[0], t);
+    }
+
+    #[test]
+    fn the_records_plan_can_be_built_again() {
+        // The 236 record, level by level (the ground gets the rest).
+        let levels: [&[u8]; 7] = [
+            &[],
+            &[6, 3, 6, 4],
+            &[2, 8, 4],
+            &[9, 1, 1],
+            &[9, 8],
+            &[7, 7],
+            &[3],
+        ];
+        let plan: Vec<[u8; 10]> = levels
+            .iter()
+            .map(|l| {
+                let mut c = [0u8; 10];
+                for &v in *l {
+                    c[v as usize] += 1;
+                }
+                c
+            })
+            .collect();
+        let (score, steps) =
+            realize(&plan, [2; 10], 50_000_000).expect("the record's plan is buildable");
+        // A plan with two tiles on top isn't one this builds.
+        let mut two = plan.clone();
+        two[6][7] += 1;
+        assert_eq!(realize(&two, [2; 10], 1000), Err(false));
+        assert!(score >= 236, "{score}");
+        assert_eq!(
+            crate::nrpa::verify(
+                &crate::nrpa::Order::standard_free(),
+                &crate::nrpa::Play { score, steps }
+            ),
+            Ok(score)
+        );
     }
 }
