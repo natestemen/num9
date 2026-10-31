@@ -58,13 +58,13 @@ whatever is underneath, shows the level it would sit on and the points it
 would score, and turns red with the reason when it can't go there. Space
 rotates, enter places, u undoes.
 
-Press **h** to ask the engine for the best move: it plays the rest of the
+Press **h** to ask the engine for a move: it plays the rest of the
 game out hundreds of times from each candidate (Monte Carlo rollouts) and
 ranks them by expected final score, also rating the spot you're on. **g**
 moves your tile through its top picks. At the end, the engine plays the same
-deal so you can compare, and searches for the best play of that exact deal
-(now that the order is known); press **b** to step through it next to your
-own game. **?** shows all the keys.
+deal so you can compare, and searches that exact deal with hindsight (now
+that the order is known); press **b** to step through it next to your own
+game. **?** shows all the keys.
 
 To search a deal on its own: `cargo run --release --manifest-path
 rust/Cargo.toml --bin solve -- --seed 42 --level 3 --per-layer 8`.
@@ -73,8 +73,8 @@ rust/Cargo.toml --bin solve -- --seed 42 --level 3 --per-layer 8`.
 
 **[natestemen.github.io/num9](https://natestemen.github.io/num9/)**: the
 terminal game in the browser, running the same engine compiled to
-WebAssembly (`rust/web`). Play with hints, see how the engine and its search
-for the best play do on your deal, try the exactly solved small-deck
+WebAssembly (`rust/web`). Play with hints, compare your game with the
+engine's on the same deal move by move, try the exactly solved small-deck
 puzzles, and step through the record plays. To build it locally (needs
 `rustup target add wasm32-unknown-unknown`):
 
@@ -148,10 +148,13 @@ still to come but not their order (`num9_core.STRATEGIES`; results under
 - `low_to_base`: `edges_then_up` with a higher cut-off: tiles worth 4 or
   less go on the ground and the rest go up, except for the last four tiles,
   which all go as high as they can.
-- `monte_carlo`: shortlists the snuggest few spots on each level and plays
-  the rest of the game out 64 times from each, shuffling the tiles still to
-  come and finishing with `low_to_base`; the best average final score wins.
-  The terminal game's hints use the same method.
+- `monte_carlo`: shortlists the eight snuggest spots on each level and plays
+  the rest of the game out from them, shuffling the tiles still to come and
+  finishing with `low_to_base`; the best average final score wins. The
+  simulations (64 per spot on average) go out by successive halving: in
+  rounds, each dropping the weaker half of the spots still in, so the
+  contenders get most of them. The hints use the same simulations, spread
+  evenly so every spot gets an estimate.
 - `keep_support`: `low_to_base`, but a tile going up also avoids stranding
   support: cells of the level below that no tile still to come could ever
   rest on (`num9_core::support`). Spots score `edges touching - 0.15 × cells
@@ -164,7 +167,7 @@ known or when it is free to choose:
 - `solve` (nested Monte Carlo search, `num9_core::solver`): finds a
   high-scoring play of a known deal by trying every candidate at each step,
   judging each with a smaller search from there, and following the best
-  complete game found. It finds the "best play" shown after a game.
+  complete game found. The terminal game runs it after a game.
 - `maxscore` (Nested Rollout Policy Adaptation, `num9_core::nrpa`): learns
   a weight for each move from its own best games, steering its random
   playouts towards them; for a fixed deal or with the order free.
@@ -180,19 +183,22 @@ plays strategies on the same deals, so differences are measured on matched
 games: far more precisely than comparing separate averages. A SPEC is a
 strategy with optional settings, e.g. `monte_carlo:policy=keep_support`.
 
-Does Monte Carlo get better if its simulated games are played by
-`keep_support` instead of `low_to_base`? Barely: much less than spending
-the same extra time on more simulations of the cheap policy (its estimates
-are noisy, so more of them helps most):
+How Monte Carlo spends its simulations matters as much as how many it
+runs. Spreading them evenly over four candidates (the old default) loses
+about 2 points a game to successive halving over eight, for about 1.7 times
+the time. With five times the time to spare, more simulations and smarter
+ones (played out by `keep_support` instead of `low_to_base`) help about as
+much as each other:
 
 <!-- arena:start -->
 `arena --games 1000 --seed 1`: 1000 deals, the same for every strategy; ± is one standard error.
 
 | strategy | avg | vs monte_carlo on the same deals | wins / ties / losses | games/s (8 threads) |
 | --- | --- | --- | --- | --- |
-| `monte_carlo` | 86.41 ± 0.36 |  |  | 5.4 |
-| `monte_carlo:policy=keep_support` | 87.14 ± 0.35 | +0.72 ± 0.42 | 508 / 40 / 452 | 0.9 |
-| `monte_carlo:rollouts=320` | 88.57 ± 0.35 | +2.15 ± 0.41 | 553 / 49 / 398 | 0.9 |
+| `monte_carlo` | 88.41 ± 0.35 |  |  | 2.7 |
+| `monte_carlo:halving=0,per_layer=4` | 86.41 ± 0.36 | -1.99 ± 0.41 | 420 / 34 / 546 | 4.5 |
+| `monte_carlo:policy=keep_support` | 90.02 ± 0.35 | +1.62 ± 0.41 | 505 / 37 / 458 | 0.5 |
+| `monte_carlo:rollouts=320` | 90.12 ± 0.34 | +1.71 ± 0.39 | 533 / 45 / 422 | 0.5 |
 <!-- arena:end -->
 
 ## stats
@@ -208,6 +214,6 @@ are noisy, so more of them helps most):
 | solid_base_high_top | 1000 | 48.93 | 47.00 | 14 | 107 | 0.16 | 6111.65 |
 | maximize_lookahead | 1000 | 60.21 | 59.00 | 30 | 113 | 51.36 | 19.47 |
 | low_to_base | 1000 | 62.74 | 61.00 | 33 | 115 | 0.12 | 8029.16 |
-| monte_carlo | 1000 | 86.41 | 86.00 | 54 | 142 | 505.86 | 1.98 |
+| monte_carlo | 1000 | 88.41 | 89.00 | 55 | 132 | 883.73 | 1.13 |
 | keep_support | 1000 | 64.78 | 63.00 | 35 | 125 | 0.70 | 1419.30 |
 <!-- benchmarks:end -->
