@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NMBR 9 Engine</title>
+    <meta name="description" content="Play NMBR 9 in the browser with an engine that suggests moves, solves small decks exactly and holds the free-order record of 241." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23e53935'/><text x='8' y='12.5' font-size='12' font-family='monospace' font-weight='bold' text-anchor='middle' fill='white'>9</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="js/main.js"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="#play"><b>NMBR 9</b> <span>engine</span></a>
+      <nav>
+        <a href="#play">Play</a>
+        <a href="#companion">Companion</a>
+        <a href="#challenges">Challenges</a>
+        <a href="#records">Records</a>
+        <a href="#about">About</a>
+      </nav>
+      <a class="source" href="https://github.com/natestemen/num9">source</a>
+    </header>
+    <main>
+      <p id="loading">Loading the engine…</p>
+      <section id="play" hidden></section>
+      <section id="companion" hidden>
+        <p class="intro">
+          Playing with the real cards? Play against the engine: each time a card is turned over, enter its number, and the
+          engine places that tile on its own board while you place yours on the table. It only ever knows the cards turned over
+          so far. Hide its board with <kbd>h</kbd> if you'd rather not peek, and enter your score at the end to see who won.
+        </p>
+      </section>
+      <section id="challenges" hidden>
+        <p class="intro">
+          All the tiles are yours from the start: place them in any order and get as close as you can to the most the deck
+          allows. Every maximum is <em>proven</em>: an exhaustive search tried every possible stack. On a computer every tile
+          starts on the board: move
+          them into a stack and submit it. On a phone, pick tiles from the tray one at a time. <kbd>s</kbd> shows a best play.
+        </p>
+        <div class="decks"></div>
+      </section>
+      <section id="records" hidden>
+        <p class="intro">
+          With the tiles placed in any order, how high can you score? The best previously reported was 229. The engine's
+          searches found <b>241</b>, and <a href="https://github.com/natestemen/num9/blob/main/records/above-200/INDEX.md">over a thousand distinct plays above 200</a>; here is the best of each of
+          the ten highest scores. No play can beat 354 (see About). Pick a play
+          and step through it with <kbd>←</kbd> <kbd>→</kbd>.
+        </p>
+      </section>
+      <section id="about" hidden>
+        <article>
+          <h1>About</h1>
+          <p>
+            <a href="https://boardgamegeek.com/boardgame/217449/nmbr-9">NMBR 9</a> is a tile-laying game: twenty tiles, two of
+            each number from 0 to 9, are drawn one at a time and each must be placed before the next is seen. A tile scores its
+            number times the level it sits on (the ground is level 0), and to go up a level it must lie entirely on tiles below,
+            on at least two of them. This site runs the <a href="https://github.com/natestemen/num9">num9</a> engine, written in
+            Rust and compiled to WebAssembly, entirely in your browser.
+          </p>
+
+          <h2>Hints</h2>
+          <p>
+            Ask for a hint and the engine plays the rest of the game out hundreds of times from each candidate placement,
+            with the tiles still to come shuffled each time (Monte Carlo rollouts), then ranks the candidates by their average final
+            score. After a game it plays the same tiles itself, in the same order and knowing no more than you did, and you can step
+            through its game next to your own. It's a strong heuristic, not perfect play: it can be beaten.
+          </p>
+
+          <h2>Game analysis</h2>
+          <p>
+            After a game the engine goes back over every move, the way a chess engine reviews a game. It plays the rest of the game
+            out from the position before each move, from your move and from the alternatives, and grades yours by the expected
+            final points it gave away next to the engine's own pick: engine's pick, excellent, good, inaccuracy (?!), mistake (?) or blunder (??). That gives an accuracy
+            for the game and for its opening, middle and end; a graph of the expected final score; a reason for each slip in words;
+            the lessons that cost the most; and a way to retry any move to find a better one.
+          </p>
+
+          <h2>The highest possible score</h2>
+          <p>
+            With the order of the tiles free, the maximum score is an open problem. Lagerkvist's
+            <em>Nmbr9 as a Constraint Programming Challenge</em> (2020) cites 229 as the best known. The engine designs stacks from
+            the top down (choose what goes on the highest level, then cover it as cheaply as possible, level by level) and found
+            236 and over a thousand distinct plays above 200. A second search then improves good stacks: it lifts off the top six
+            to twelve tiles and puts them back in the best possible way (an exhaustive search), again and again. It turned a 230
+            into <b>241</b>, reaching level 6 with a 7 alone on top. They are in <a href="#records">Records</a>.
+          </p>
+          <p>
+            In the other direction, <b>no play can score more than 354</b>. An integer program assigns tiles to levels to maximise
+            the score, subject to facts every legal stack obeys. These include that a level is never larger than the one below it,
+            and that anything above the ground rests on at least two tiles. The rest are shape facts computed by exhaustive search:
+            how much wider the level below one or two tiles must be, and how much area a level of two or three tiles can hold up.
+            So the true maximum is somewhere between 241 and 354.
+          </p>
+
+          <h2>Small decks, solved</h2>
+          <p>
+            With only a few tiles the whole game can be searched: every reachable position, counting stacks that differ by sliding
+            or turning as the same. That gives the exact value of perfect play, and the most each deck can score with the order
+            chosen freely. A faster search answers just that last question (any finished stack can be built level by level, and
+            stacks that can't beat the best found are cut short), proving the maximum of decks up to seven tiles in seconds: the
+            <a href="#challenges">Challenges</a> ask you to reach those.
+          </p>
+          <table>
+            <thead>
+              <tr><th>Deck</th><th>Tiles</th><th>Positions</th><th>Perfect play averages</th><th>Best with the order free</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>two 0s and two 1s</td><td>4</td><td>108</td><td>1.00</td><td>2</td></tr>
+              <tr><td>one each of 0 to 3</td><td>4</td><td>398</td><td>2.33</td><td>3</td></tr>
+              <tr><td>one each of 0 to 4</td><td>5</td><td>102,763</td><td>4.22</td><td>7</td></tr>
+              <tr><td>two each of 0, 1 and 2</td><td>6</td><td>3.5 million</td><td>3.44</td><td>7</td></tr>
+              <tr><td>one each of 0 to 5</td><td>6</td><td>39.7 million</td><td>8.11</td><td>16</td></tr>
+            </tbody>
+          </table>
+          <p>
+            Even on these, not knowing the order costs a lot: perfect play averages between half and three quarters of what the
+            best order would score. Each extra tile multiplies the positions by a hundred or more, so the full game (twenty tiles)
+            is far out of reach.
+          </p>
+        </article>
+      </section>
+    </main>
+
+    <div id="help" class="modal" hidden>
+      <div class="box">
+        <div class="box-title">Help</div>
+        <div class="box-body">
+          <p><b>How to play</b></p>
+          <p>
+            Place the tiles one at a time, in the order they're drawn. Each tile scores its value × its level (the ground is level
+            0). A tile must touch another tile on its own level. To go up a level it must sit entirely on tiles below, on at least
+            two. Tiles land on whatever is underneath, so just slide them around.
+          </p>
+          <p><b>Keys</b></p>
+          <dl>
+            <dt>←↑↓→ / wasd</dt><dd>move (with shift: 4 cells)</dd>
+            <dt>space / r</dt><dd>rotate clockwise (R: anticlockwise)</dd>
+            <dt>enter</dt><dd>place the tile</dd>
+            <dt>u</dt><dd>undo</dd>
+            <dt>h</dt><dd>ask the engine for its move</dd>
+            <dt>g / 1-3</dt><dd>move the tile to the engine's picks</dd>
+            <dt>tab</dt><dd>switch between tiles and height map</dd>
+            <dt>mouse</dt><dd>hover to aim, click to place, drag to move the board, scroll or right-click to rotate</dd>
+            <dt>c / ⌖</dt><dd>bring the stack back to the middle</dd>
+            <dt>touch</dt><dd>tap to move the tile there, drag to slide it, tap the tile (or Place) to place it, pinch to zoom</dd>
+            <dt>a</dt><dd>after a game: go through it move by move with the engine's verdict on each (m jumps to the next mistake, r retries a move)</dd>
+            <dt>b</dt><dd>after a game: step through your game next to the engine's (tab switches)</dd>
+            <dt>n</dt><dd>new game</dd>
+            <dt>l</dt><dd>share: a link to this deal, or after a game your score with a link to the same deal (the address bar holds the deal too)</dd>
+            <dt>Challenges</dt><dd>on a computer, drag the tiles into a stack (scroll or space turns the one you hold) and press enter to submit it; on a phone, pick a tile with its number or by tapping it. s shows a best play, d goes to the next</dd>
+          </dl>
+          <p><b>Reading the board</b></p>
+          <p>
+            Tiles show their value and level (7² = a 7 on level 2) and get brighter the higher they sit. Tiles above the ground
+            have a rim in their level's colour (the same colours as the Levels box), and higher tiles cast shadows on lower ones.
+            Hover over or tap a level in the Levels box to see only its tiles; ▦ (or tab) colours the board by level. The last
+            tile placed is underlined.
+          </p>
+          <p class="dim">Press any key or click to close</p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

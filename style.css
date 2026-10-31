@@ -1,0 +1,1067 @@
+/* A terminal look, after the num9 terminal game: dark background,
+   monospace text, rounded boxes with their titles in the border. */
+
+:root {
+  --bg: #0f1116;
+  --fg: #e4e6eb;
+  --muted: rgb(140, 145, 160);
+  --line: rgb(70, 74, 86);
+  --accent: rgb(255, 200, 80);
+  --hint: rgb(80, 230, 240);
+  --good: rgb(120, 220, 120);
+  --bad: rgb(255, 120, 120);
+  --font: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.45 var(--font);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--hint);
+}
+
+kbd {
+  font: inherit;
+  font-weight: 700;
+  color: #000;
+  background: var(--muted);
+  padding: 0 0.5ch;
+  border-radius: 3px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 2ch;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand span {
+  color: var(--muted);
+}
+
+nav {
+  display: flex;
+  gap: 0.5ch;
+  flex-wrap: wrap;
+}
+
+nav a,
+.source {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.1rem 0.8ch;
+  border-radius: 4px;
+}
+
+nav a:hover,
+.source:hover {
+  color: var(--fg);
+}
+
+nav a.on {
+  color: #000;
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.source {
+  margin-left: auto;
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#loading {
+  margin: 2rem;
+  color: var(--muted);
+}
+
+section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.9rem 1rem 0.5rem;
+  gap: 0.9rem;
+}
+
+section[hidden] {
+  display: none;
+}
+
+.intro {
+  margin: 0;
+  color: var(--muted);
+  max-width: 110ch;
+}
+
+.intro b,
+.intro em {
+  color: var(--fg);
+}
+
+/* Boxes with the title set into the top border. */
+.box {
+  position: relative;
+  border: 1px solid var(--muted);
+  border-radius: 9px;
+  padding: 0.75rem 1.2ch 0.5rem;
+}
+
+.box-title {
+  position: absolute;
+  top: -0.78em;
+  left: 1.2ch;
+  padding: 0 0.6ch;
+  background: var(--bg);
+  font-weight: 700;
+  white-space: nowrap;
+  max-width: calc(100% - 2.4ch);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.box-body {
+  white-space: pre-wrap;
+}
+
+/* Board and side panel. */
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 1.2ch;
+}
+
+.board-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  padding: 0.7rem 0.6ch 0.4rem;
+}
+
+.canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-wrap canvas {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.zoom {
+  position: absolute;
+  right: 1ch;
+  bottom: 0.5rem;
+  display: flex;
+  gap: 0.4ch;
+}
+
+.zoom button,
+.key,
+.decks button,
+.record-list button {
+  font: inherit;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.zoom button[data-unspot] {
+  width: auto;
+  padding: 0 0.8ch;
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.zoom button[hidden] {
+  display: none;
+}
+
+.lvl {
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.lvl:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.zoom button {
+  width: 2.2em;
+  height: 2.2em;
+  background: rgba(15, 17, 22, 0.85);
+}
+
+.panel {
+  width: 38ch;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  padding-top: 0.6rem;
+  overflow-y: auto;
+}
+
+.panel .box-body {
+  white-space: pre;
+}
+
+.panel .grow {
+  flex: 1;
+  min-height: 3.2rem;
+}
+
+.panel .row[data-send],
+.panel .row[data-play] {
+  cursor: pointer;
+}
+
+.panel .row[data-send]:hover,
+.panel .row[data-play]:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.gap {
+  height: 0.7em;
+}
+
+.message {
+  padding: 0 1ch;
+  white-space: normal;
+}
+
+.hand {
+  display: flex;
+  align-items: center;
+  gap: 3ch;
+  padding: 0.3rem 0 0.4rem 2ch;
+  min-height: 5.4rem;
+}
+
+.hand > div:last-child > div:first-child {
+  font-size: 1.6em;
+  line-height: 1.1;
+}
+
+.shape {
+  display: grid;
+  gap: 0;
+}
+
+.shape i {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.gauge {
+  position: relative;
+  height: 1.45em;
+  background: rgb(40, 44, 52);
+}
+
+.gauge div {
+  height: 100%;
+  background: var(--hint);
+  opacity: 0.85;
+}
+
+.gauge span {
+  position: absolute;
+  inset: 0;
+  text-align: center;
+  mix-blend-mode: difference;
+}
+
+/* Key bar: chips that can be clicked too. */
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.2ch;
+  padding: 0.5rem 0 0.2rem;
+}
+
+.key {
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.key b {
+  color: #000;
+  background: var(--muted);
+  padding: 0 0.6ch;
+  border-radius: 3px;
+  margin-right: 0.4ch;
+}
+
+.key:hover b {
+  background: var(--fg);
+}
+
+/* The summary over the board. */
+.popup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(62ch, calc(100% - 2ch));
+  max-height: calc(100% - 2rem);
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--muted);
+  border-radius: 9px;
+  padding: 0.9rem 2ch 0.8rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.popup .box-title {
+  position: static;
+  padding: 0;
+  margin-bottom: 0.5rem;
+  color: var(--accent);
+}
+
+.popup .moves {
+  columns: 2;
+  margin-top: 0.4rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.6ch;
+}
+
+/* Game analysis. */
+.graph {
+  display: block;
+  width: 100%;
+  height: 96px;
+  cursor: pointer;
+}
+
+.graph text {
+  font: 8px var(--font);
+  fill: var(--muted);
+}
+
+.legend {
+  font-size: 0.85em;
+}
+
+.movelist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  white-space: normal;
+}
+
+.movelist .mv {
+  font: inherit;
+  font-size: 0.92em;
+  padding: 0.05rem 0.6ch;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.movelist .mv {
+  color: var(--fg);
+}
+
+.movelist .mv small {
+  color: var(--muted);
+}
+
+.movelist .mv.on {
+  border-color: var(--accent);
+  background: rgba(255, 200, 80, 0.15);
+}
+
+.panel .grades {
+  white-space: normal;
+}
+
+/* Companion: the cards to enter. */
+.cards {
+  display: flex;
+  align-items: center;
+  gap: 0.5ch;
+  flex-wrap: wrap;
+}
+
+.cards-label {
+  color: var(--muted);
+  margin-right: 1ch;
+}
+
+.cards button {
+  font: inherit;
+  min-width: 3.4em;
+  padding: 0.2rem 0.6ch 0.15rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+
+.cards button b {
+  font-size: 1.35em;
+}
+
+.cards button small {
+  font-size: 0.75em;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+}
+
+.cards button:disabled {
+  opacity: 0.18;
+  cursor: default;
+}
+
+.cards button:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+.your-score {
+  display: flex;
+  align-items: center;
+  gap: 1.5ch;
+  font-weight: 700;
+}
+
+.your-score input {
+  font: inherit;
+  font-size: 1.2em;
+  width: 7ch;
+  padding: 0.25rem 0.8ch;
+  color: var(--fg);
+  background: rgb(30, 33, 41);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+
+.panel .wrap {
+  white-space: normal;
+}
+
+/* The tiles still to come, drawn (dots on phones instead). */
+.bag {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1.2ch;
+  margin-top: 0.4rem;
+  white-space: normal;
+}
+
+.bag-v {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35ch;
+}
+
+.bag-v b {
+  min-width: 1ch;
+}
+
+.bag .shape i {
+  width: 0.32rem;
+  height: 0.32rem;
+}
+
+.shape.used i[style] {
+  opacity: 0.18;
+}
+
+.panel .box-body > div:has(+ .bag),
+.panel .box-body > div:has(+ div + .bag) {
+  display: none;
+}
+
+/* The challenge tray: on wider screens each number with its shapes, on
+   phones (below) a coloured button with dots. */
+.tray button {
+  background: rgb(26, 29, 36);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 0.5ch;
+  padding: 0.35rem 0.9ch;
+}
+
+.tray button b {
+  color: var(--c);
+  align-self: center;
+}
+
+.tray button small {
+  display: none;
+}
+
+.tray .shapes {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4ch;
+}
+
+.tray .shape i {
+  width: 0.6rem;
+  height: 0.6rem;
+}
+
+.tray button:not(:disabled):hover {
+  border-color: var(--c);
+}
+
+.tray button.held {
+  border-color: var(--c);
+  background: rgb(40, 44, 54);
+}
+
+/* A button that reads like a link (share this deal). */
+.linkish {
+  font: inherit;
+  padding: 0;
+  color: var(--hint);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Challenges on a computer: submit the stack. */
+.panel .submit {
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.1em;
+  padding: 0.55rem;
+  color: #000;
+  background: var(--accent);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.panel .submit:disabled {
+  color: var(--muted);
+  background: rgb(40, 44, 54);
+  cursor: default;
+}
+
+/* Challenges: the tile you're holding. */
+.tray button.held {
+  outline: 3px solid var(--fg);
+  outline-offset: 2px;
+}
+
+/* Challenges and records. */
+.decks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6ch;
+}
+
+#challenges .decks {
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.deck-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6ch;
+}
+
+.deck-size {
+  min-width: 7ch;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.decks button,
+.record-list button {
+  padding: 0.2rem 1ch;
+  color: var(--muted);
+}
+
+.decks button.on,
+.record-list button.on {
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.record-list .box-body {
+  white-space: normal;
+}
+
+.record-list .list {
+  display: flex;
+  gap: 0.6ch;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+
+.record-list button {
+  flex: none;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.record-list button span,
+.record-list button small {
+  display: block;
+  color: inherit;
+  opacity: 0.8;
+  font-size: 0.85em;
+}
+
+/* About. */
+#about {
+  overflow-y: auto;
+}
+
+article {
+  max-width: 92ch;
+  margin: 0 auto 2rem;
+}
+
+article h1 {
+  color: var(--accent);
+  font-size: 1.4em;
+}
+
+article h2 {
+  font-size: 1.1em;
+  margin-top: 1.6em;
+}
+
+article p {
+  color: #cfd2d8;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+th,
+td {
+  padding: 0.25rem 1.6ch;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Help. */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 10;
+  padding: 1rem;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal .box {
+  background: var(--bg);
+  max-width: 76ch;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.modal .box-body {
+  white-space: normal;
+}
+
+.modal dl {
+  display: grid;
+  grid-template-columns: 15ch 1fr;
+  gap: 0.15rem 1ch;
+}
+
+.modal dt {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.modal dd {
+  margin: 0;
+}
+
+.dim {
+  color: var(--muted);
+}
+
+/* Touch controls, the status line and the panel's close button only show
+   on touch screens and phones (below). */
+.status,
+.touchbar,
+.sheet-close {
+  display: none;
+}
+
+.touchbar {
+  gap: 0.4rem;
+  padding: 0.45rem 0 0.1rem;
+}
+
+.touchbar button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.9rem;
+  font: inherit;
+  font-size: 1.05em;
+  font-weight: 700;
+  color: var(--fg);
+  background: rgb(30, 33, 41);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 0.3ch;
+  touch-action: manipulation;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.touchbar button:active {
+  background: rgb(50, 54, 66);
+}
+
+.touchbar button.primary {
+  flex-grow: 1.6;
+  color: #000;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button {
+  touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+  .touchbar {
+    display: flex;
+  }
+}
+
+/* Phones and narrow windows: everything on one screen. The board takes
+   what's left after a two-line status and the buttons; the panel becomes a
+   sheet that slides up from the bottom (Info). */
+@media (max-width: 860px) {
+  html,
+  body {
+    height: 100%;
+    height: 100dvh;
+    font-size: 13px;
+  }
+
+  header {
+    padding: 0.35rem 0.6rem;
+    gap: 1.2ch;
+  }
+
+  .brand span,
+  .source {
+    display: none;
+  }
+
+  nav a {
+    padding: 0.1rem 0.7ch;
+  }
+
+  nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  section {
+    padding: 0.7rem 0.5rem calc(0.4rem + env(safe-area-inset-bottom));
+    gap: 0.5rem;
+  }
+
+  section > .intro {
+    display: none;
+  }
+
+  .stage {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .board-box {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .zoom button[data-zoom] {
+    display: none; /* pinch instead */
+  }
+
+  .status {
+    display: block;
+    padding: 0 0.6ch;
+    line-height: 1.5;
+  }
+
+  .status .bag-line {
+    letter-spacing: -0.02em;
+  }
+
+  .status > div {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .in-hand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6ch;
+    vertical-align: middle;
+  }
+
+  .shape.mini i {
+    width: 0.42rem;
+    height: 0.42rem;
+  }
+
+  .touchbar {
+    display: flex;
+  }
+
+  .keys {
+    display: none;
+  }
+
+  .panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    width: auto;
+    max-height: 78dvh;
+    padding: 0.6rem 0.8rem calc(1rem + env(safe-area-inset-bottom));
+    gap: 1rem;
+    background: var(--bg);
+    border-top: 1px solid var(--muted);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.7);
+    transform: translateY(105%);
+    transition: transform 0.2s ease;
+    visibility: hidden;
+  }
+
+  .panel.open {
+    transform: none;
+    visibility: visible;
+  }
+
+  .panel .box-body {
+    white-space: pre-wrap;
+  }
+
+  .panel .grow {
+    flex: none;
+  }
+
+  .sheet-close {
+    display: block;
+    align-self: flex-end;
+    font: inherit;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.3rem 1ch;
+  }
+
+  .popup {
+    font-size: 12.5px;
+    padding: 0.8rem 1.6ch;
+  }
+
+  .popup .moves {
+    columns: 1;
+  }
+
+  .popup .actions {
+    display: none; /* the buttons below do the same */
+  }
+
+  /* No room for shapes on phones: dots instead, and coloured buttons. */
+  .bag {
+    display: none;
+  }
+
+  .panel .box-body > div:has(+ .bag),
+  .panel .box-body > div:has(+ div + .bag) {
+    display: block;
+  }
+
+  .tray button {
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    background: var(--c);
+    color: var(--t);
+    border: none;
+  }
+
+  .tray button b {
+    color: var(--t);
+  }
+
+  .tray button small {
+    display: inline;
+  }
+
+  .tray .shapes {
+    display: none;
+  }
+
+  /* The card buttons in two rows of five, big enough to tap easily. */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.4rem;
+  }
+
+  .cards-label {
+    display: none;
+  }
+
+  .cards .your-score {
+    grid-column: 1 / -1;
+  }
+
+  .cards button {
+    min-width: 0;
+    min-height: 3.6rem;
+    padding: 0.2rem 0;
+    border-radius: 8px;
+  }
+
+  .cards button b {
+    font-size: 1.9em;
+  }
+
+  .cards button small {
+    font-size: 0.95em;
+  }
+
+  /* One strip to scroll sideways, sizes and all. */
+  #challenges .decks {
+    flex-direction: row;
+  }
+
+  .deck-row {
+    display: contents;
+  }
+
+  .deck-size {
+    min-width: auto;
+    white-space: nowrap;
+    padding-left: 0.6ch;
+  }
+
+  .decks {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    flex: none;
+  }
+
+  .decks button {
+    flex: none;
+    min-height: 2.2rem;
+  }
+
+  .record-list {
+    flex: none;
+  }
+
+  /* Two rows of five. */
+  .record-list .list {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.35rem;
+    overflow: visible;
+  }
+
+  .record-list .list button {
+    padding: 0.15rem 0.6ch;
+  }
+
+  .record-list button small {
+    display: none;
+  }
+
+  .modal dl {
+    grid-template-columns: 11ch 1fr;
+  }
+}
+
+/* The smallest phones: the tabs need the whole header. */
+@media (max-width: 480px) {
+  .brand {
+    display: none;
+  }
+}
